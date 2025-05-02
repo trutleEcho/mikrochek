@@ -1,0 +1,141 @@
+@startuml MikroChek Class Diagram
+
+' Layout direction
+top to bottom direction
+
+' Styling
+skinparam class {
+    BackgroundColor #1A1F2C
+    BorderColor #3B82F6
+    ArrowColor #3B82F6
+    FontColor #FFFFFF
+}
+
+' Layout settings for portrait mode
+skinparam linetype polyline
+skinparam nodesep 80
+skinparam ranksep 120
+skinparam padding 5
+skinparam packagePadding 15
+
+' Navigation
+package "Navigation" {
+    class NavDestination {
+        + MainDashboard
+        + AnalyticsDashboard
+        + QuotationsList
+        + QuotationCreate
+        + QuotationEdit
+        + QuotationDetails
+        + ProductsList
+        + ProductCreate
+        + ProductEdit
+        + ProductDetails
+        + PurchaseOrdersList
+        + PurchaseOrderCreate
+        + PurchaseOrderEdit
+        + PurchaseOrderDetails
+        + EmployeesList
+        + EmployeeCreate
+        + PayrollDashboard
+        + PayrollProcessing
+        + KanbanBoard
+        + Login
+        + Signup
+    }
+}
+
+' Menu Items
+package "Menu Management" {
+    class AppMenuItem {
+        + id: String
+        + title: String
+        + screen: NavDestination
+        + category: String
+        + icon: ImageVector
+        + permissions: List<String>
+    }
+
+    class AppMenuItems {
+        + {static} getMenuItems(currentUser: User?): List<AppMenuItem>
+        + {static} getMenuItemsByCategory(currentUser: User?): Map<String, List<AppMenuItem>>
+        + {static} getRequiredPermissions(menuItemId: String): List<String>
+    }
+}
+
+' User Management
+package "User Management" {
+    class User {
+        + id: String
+        + name: String
+        + email: String
+        + organization: String
+        + isActive: Boolean
+        + permissions: List<String>
+    }
+
+    class UserState {
+        - currentUser: StateFlow<User?>
+        - isAuthenticated: StateFlow<Boolean>
+        - authToken: StateFlow<String?>
+        + setUser(user: User?)
+        + getCurrentUser(): User?
+        + setAuthToken(token: String?)
+        + getAuthToken(): String?
+        + clearUserSession()
+        + isUserValid(): Boolean
+    }
+}
+
+' Layout Components
+package "UI Components" {
+    class MainLayout {
+        - authRepository: AuthRepository
+        - userRepository: UserRepository
+        - toast: ToastData?
+        - navController: NavController
+        - currentRoute: String
+        + handleLogout()
+        + handleAuthError()
+        + showToast()
+    }
+
+    class Sidebar {
+        - currentRoute: String
+        - onNavigate: (String) -> Unit
+        - onLogout: () -> Unit
+        - expandedCategory: String
+        + toggleCategory(category: String)
+        + navigateToRoute(route: String)
+    }
+}
+
+' Tab Management
+package "Tab Management" {
+    class Tab {
+        + id: String
+        + title: String
+        + destination: NavDestination
+    }
+
+    class TabManager {
+        - tabs: List<Tab>
+        + getCurrentTab(): Tab?
+        + addTab(tab: Tab)
+        + removeTab(tabId: String)
+        + updateTabDestination(tabId: String, destination: NavDestination)
+        + clear()
+    }
+}
+
+' Relationships with clear vertical flow
+MainLayout -[#3B82F6]down-> Sidebar : contains
+MainLayout -[#3B82F6]down-> TabManager : uses
+MainLayout -[#3B82F6]down-> UserState : uses
+Sidebar -[#3B82F6]down-> AppMenuItems : uses
+AppMenuItems -[#3B82F6]down-> AppMenuItem : contains
+AppMenuItem -[#3B82F6]down-> NavDestination : references
+TabManager -[#3B82F6]down-> Tab : manages
+UserState -[#3B82F6]down-> User : manages
+
+@enduml 

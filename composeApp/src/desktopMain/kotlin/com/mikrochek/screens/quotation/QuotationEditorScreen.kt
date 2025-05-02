@@ -1,0 +1,765 @@
+package com.mikrochek.screens.quotation
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.mikrochek.components.ActionButton
+import com.mikrochek.components.common.*
+import com.mikrochek.components.layout.ContentCard
+import com.mikrochek.components.layout.PageHeader
+import com.mikrochek.components.layout.Section
+import com.mikrochek.navigation.NavDestination
+import com.mikrochek.server.database.models.*
+import com.mikrochek.server.repository.quotation.QuotationRepository
+import com.mikrochek.server.service.DocumentService
+import com.mikrochek.server.service.ProductService
+import com.mikrochek.theme.AppColors
+import com.mikrochek.theme.AppTheme
+import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import java.text.NumberFormat
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
+import java.util.UUID
+
+@OptIn(ExperimentalMaterialApi::class)
+@Composable
+fun QuotationEditorScreen(
+    documentService: DocumentService,
+    productService: ProductService,
+    quotationId: String? = null,
+    userId: String,
+    onSaved: () -> Unit,
+    onCancel: () -> Unit,
+    onNavigate: (NavDestination) -> Unit
+) {
+    AppTheme {
+        var quotation by remember {
+            mutableStateOf(
+                Quotation(
+                    id = quotationId ?: UUID.randomUUID().toString(),
+                    quotationNumber = "QT-${System.currentTimeMillis()}",
+                    customerId = "",
+                    customerName = "",
+                    date = System.currentTimeMillis(),
+                    validUntil = System.currentTimeMillis() + ChronoUnit.DAYS.getDuration().toMillis() * 30,
+                    items = emptyList(),
+                    subtotal = 0.0,
+                    discountTotal = 0.0,
+                    taxTotal = 0.0,
+                    total = 0.0,
+                    notes = null,
+                    terms = null,
+                    status = QuotationStatus.DRAFT,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
+                    createdBy = userId,
+                    updatedBy = userId
+                )
+            )
+        }
+        
+        var isLoading by remember { mutableStateOf(quotationId != null) }
+        var showError by remember { mutableStateOf(false) }
+        var errorMessage by remember { mutableStateOf("") }
+        var showAddItemDialog by remember { mutableStateOf(false) }
+        var hasUnsavedChanges by remember { mutableStateOf(false) }
+        var showUnsavedChangesDialog by remember { mutableStateOf(false) }
+        var products by remember { mutableStateOf<List<Product>>(emptyList()) }
+        var selectedProduct by remember { mutableStateOf<Product?>(null) }
+        
+        val scope = rememberCoroutineScope()
+        val currencyFormatter = remember { NumberFormat.getCurrencyInstance() }
+
+        // Load products
+        LaunchedEffect(Unit) {
+            try {
+                products = productService.getAllProducts()
+            } catch (e: Exception) {
+                errorMessage = "Failed to load products: ${e.message}"
+                showError = true
+            }
+        }
+
+        // Load existing quotation if editing
+        LaunchedEffect(quotationId) {
+            if (quotationId != null) {
+                try {
+                    val doc = documentService.getDocument(quotationId)
+                    if (doc != null) {
+                        quotation = Json.decodeFromString(doc.content)
+                    }
+                } catch (e: Exception) {
+                    errorMessage = "Failed to load quotation: ${e.message}"
+                    showError = true
+                } finally {
+                    isLoading = false
+                }
+            } else {
+                isLoading = false
+            }
+        }
+
+        // Calculate totals whenever items change
+        LaunchedEffect(quotation.items) {
+            val subtotal = quotation.items.sumOf { it.subtotal }
+            val discountTotal = quotation.items.sumOf { it.discountAmount }
+            val taxTotal = quotation.items.sumOf { it.taxAmount }
+            val total = quotation.items.sumOf { it.total }
+            
+            quotation = quotation.copy(
+                subtotal = subtotal,
+                discountTotal = discountTotal,
+                taxTotal = taxTotal,
+                total = total,
+                updatedAt = System.currentTimeMillis()
+            )
+        }
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            // Content goes directly here without SideBar
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colors.background
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    PageHeader(
+                        title = if (quotationId != null) "Edit Quotation" else "New Quotation",
+                        subtitle = if (quotationId != null) "Editing ${quotation.quotationNumber}" else "Create a new quotation",
+                        actions = {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(modifier = Modifier.width(120.dp)) {
+                                    ActionButton(
+                                        text = "Cancel",
+                                        icon = Icons.Default.Close,
+                                        onClick = {
+                                            if (hasUnsavedChanges) {
+                                                showUnsavedChangesDialog = true
+                                            } else {
+                                                onCancel()
+                                            }
+                                        }
+                                    )
+                                }
+                                Box(modifier = Modifier.width(120.dp)) {
+                                    ActionButton(
+                                        text = "Save",
+                                        icon = Icons.Default.Save,
+                                        onClick = {
+                                            scope.launch {
+                                                try {
+                                                    val updatedQuotation = quotation.copy(
+                                                        updatedAt = System.currentTimeMillis(),
+                                                        updatedBy = userId
+                                                    )
+                                                    
+                                                    val result = if (quotationId == null) {
+                                                        documentService.createDocument(
+                                                            type = DocumentType.QUOTATION,
+                                                            content = Json.encodeToString(updatedQuotation),
+                                                            userId = userId,
+                                                            metadata = mapOf(
+                                                                "customerName" to updatedQuotation.customerName,
+                                                                "total" to updatedQuotation.total.toString(),
+                                                                "status" to updatedQuotation.status.toString()
+                                                            )
+                                                        )
+                                                    } else {
+                                                        documentService.updateDocument(
+                                                            id = quotationId,
+                                                            content = Json.encodeToString(updatedQuotation),
+                                                            userId = userId,
+                                                            metadata = mapOf(
+                                                                "customerName" to updatedQuotation.customerName,
+                                                                "total" to updatedQuotation.total.toString(),
+                                                                "status" to updatedQuotation.status.toString()
+                                                            )
+                                                        )
+                                                    }
+
+                                                    if (result.isSuccess) {
+                                                        hasUnsavedChanges = false
+                                                        onSaved()
+                                                    } else {
+                                                        errorMessage = "Failed to save quotation"
+                                                        showError = true
+                                                    }
+                                                } catch (e: Exception) {
+                                                    errorMessage = e.message ?: "Unknown error occurred"
+                                                    showError = true
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    )
+
+                    if (isLoading) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    } else {
+                        // Customer Information Section
+                        Section(
+                            title = "Customer Information",
+                            collapsible = true,
+                            defaultExpanded = true
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = quotation.customerName,
+                                    onValueChange = { 
+                                        quotation = quotation.copy(customerName = it)
+                                        hasUnsavedChanges = true
+                                    },
+                                    label = { Text("Customer Name") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    // Date picker
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Quotation Date",
+                                            style = MaterialTheme.typography.caption,
+                                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                        )
+                                        OutlinedTextField(
+                                            value = LocalDate.ofInstant(
+                                                Instant.ofEpochMilli(quotation.date),
+                                                ZoneId.systemDefault()
+                                            ).toString(),
+                                            onValueChange = { dateStr ->
+                                                try {
+                                                    val date = LocalDate.parse(dateStr)
+                                                    quotation = quotation.copy(
+                                                        date = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                                    )
+                                                    hasUnsavedChanges = true
+                                                } catch (e: Exception) {
+                                                    // Invalid date format
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    // Valid until picker
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Valid Until",
+                                            style = MaterialTheme.typography.caption,
+                                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                        )
+                                        OutlinedTextField(
+                                            value = LocalDate.ofInstant(
+                                                Instant.ofEpochMilli(quotation.validUntil),
+                                                ZoneId.systemDefault()
+                                            ).toString(),
+                                            onValueChange = { dateStr ->
+                                                try {
+                                                    val date = LocalDate.parse(dateStr)
+                                                    quotation = quotation.copy(
+                                                        validUntil = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                                    )
+                                                    hasUnsavedChanges = true
+                                                } catch (e: Exception) {
+                                                    // Invalid date format
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Items Section
+                        Section(
+                            title = "Items",
+                            collapsible = true,
+                            defaultExpanded = true
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${quotation.items.size} items",
+                                        style = MaterialTheme.typography.subtitle1
+                                    )
+                                    
+                                    ActionButton(
+                                        text = "Add Item",
+                                        icon = Icons.Default.Add,
+                                        onClick = { showAddItemDialog = true }
+                                    )
+                                }
+                                
+                                if (quotation.items.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().height(100.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "No items added yet",
+                                            style = MaterialTheme.typography.body1,
+                                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        items(quotation.items.size) { index ->
+                                            QuotationItemCard(
+                                                item = quotation.items[index],
+                                                onDelete = {
+                                                    quotation = quotation.copy(
+                                                        items = quotation.items.filterIndexed { i, _ -> i != index }
+                                                    )
+                                                    hasUnsavedChanges = true
+                                                },
+                                                onEdit = { updatedItem ->
+                                                    quotation = quotation.copy(
+                                                        items = quotation.items.mapIndexed { i, item ->
+                                                            if (i == index) updatedItem else item
+                                                        }
+                                                    )
+                                                    hasUnsavedChanges = true
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Summary
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    elevation = 2.dp
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        SummaryRow("Subtotal", quotation.subtotal)
+                                        if (quotation.discountTotal > 0) {
+                                            SummaryRow("Discount", -quotation.discountTotal, MaterialTheme.colors.error)
+                                        }
+                                        SummaryRow("Tax", quotation.taxTotal)
+                                        Divider()
+                                        SummaryRow(
+                                            "Total",
+                                            quotation.total,
+                                            MaterialTheme.colors.primary,
+                                            MaterialTheme.typography.h6
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Terms & Notes Section
+                        Section(
+                            title = "Terms & Notes",
+                            collapsible = true,
+                            defaultExpanded = true
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = quotation.terms ?: "",
+                                    onValueChange = { 
+                                        quotation = quotation.copy(terms = it.ifEmpty { null })
+                                        hasUnsavedChanges = true
+                                    },
+                                    label = { Text("Terms & Conditions") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    minLines = 3
+                                )
+
+                                OutlinedTextField(
+                                    value = quotation.notes ?: "",
+                                    onValueChange = { 
+                                        quotation = quotation.copy(notes = it.ifEmpty { null })
+                                        hasUnsavedChanges = true
+                                    },
+                                    label = { Text("Notes") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    minLines = 2
+                                )
+                            }
+                        }
+                    }
+
+                    if (showAddItemDialog) {
+                        var selectedProduct by remember { mutableStateOf<Product?>(null) }
+                        var quantity by remember { mutableStateOf(1) }
+                        var discount by remember { mutableStateOf(0.0) }
+                        
+                        AlertDialog(
+                            onDismissRequest = { showAddItemDialog = false },
+                            title = { Text("Add Item") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    // Product selection
+                                    ExposedDropdownMenuBox(
+                                        expanded = false,
+                                        onExpandedChange = { }
+                                    ) {
+                                        OutlinedTextField(
+                                            value = selectedProduct?.name ?: "",
+                                            onValueChange = { },
+                                            label = { Text("Select Product") },
+                                            readOnly = true,
+                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(false) },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        
+                                        DropdownMenu(
+                                            expanded = false,
+                                            onDismissRequest = { }
+                                        ) {
+                                            products.forEach { product ->
+                                                DropdownMenuItem(
+                                                    onClick = {
+                                                        selectedProduct = product
+                                                    }
+                                                ) {
+                                                    Text(product.name)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Quantity
+                                    OutlinedTextField(
+                                        value = quantity.toString(),
+                                        onValueChange = { value -> 
+                                            quantity = value.toIntOrNull() ?: 1
+                                        },
+                                        label = { Text("Quantity") },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    // Discount
+                                    OutlinedTextField(
+                                        value = discount.toString(),
+                                        onValueChange = { value -> 
+                                            discount = value.toDoubleOrNull() ?: 0.0
+                                        },
+                                        label = { Text("Discount %") },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    // Preview calculations
+                                    selectedProduct?.let { product ->
+                                        val subtotal = quantity * product.sellingPrice
+                                        val discountAmount = subtotal * (discount / 100)
+                                        val taxAmount = (subtotal - discountAmount) * (product.tax / 100)
+                                        val total = subtotal - discountAmount + taxAmount
+
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text("Preview:", fontWeight = FontWeight.Bold)
+                                            Text("Subtotal: ${currencyFormatter.format(subtotal)}")
+                                            Text("Discount: ${currencyFormatter.format(discountAmount)}")
+                                            Text("Tax: ${currencyFormatter.format(taxAmount)}")
+                                            Text("Total: ${currencyFormatter.format(total)}")
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        selectedProduct?.let { product ->
+                                            val subtotal = quantity * product.sellingPrice
+                                            val discountAmount = subtotal * (discount / 100)
+                                            val taxAmount = (subtotal - discountAmount) * (product.tax / 100)
+                                            val total = subtotal - discountAmount + taxAmount
+
+                                            val newItem = QuotationItem(
+                                                productId = product.id,
+                                                productCode = product.code,
+                                                productName = product.name,
+                                                description = product.description,
+                                                quantity = quantity,
+                                                unit = product.unit,
+                                                unitPrice = product.sellingPrice,
+                                                tax = product.tax,
+                                                taxAmount = taxAmount,
+                                                discount = discount,
+                                                discountAmount = discountAmount,
+                                                subtotal = subtotal,
+                                                total = total
+                                            )
+
+                                            quotation = quotation.copy(
+                                                items = quotation.items + newItem
+                                            )
+                                            hasUnsavedChanges = true
+                                            showAddItemDialog = false
+                                        }
+                                    },
+                                    enabled = selectedProduct != null && quantity > 0
+                                ) {
+                                    Text("Add")
+                                }
+                            },
+                            dismissButton = {
+                                Button(onClick = { showAddItemDialog = false }) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
+                    }
+
+                    if (showError) {
+                        AlertDialog(
+                            title = "Error",
+                            message = errorMessage,
+                            onDismiss = { showError = false },
+                            onConfirm = { showError = false },
+                            type = AlertDialogType.Error,
+                            confirmText = "OK"
+                        )
+                    }
+
+                    if (showUnsavedChangesDialog) {
+                        AlertDialog(
+                            title = "Unsaved Changes",
+                            message = "You have unsaved changes. Are you sure you want to leave?",
+                            onDismiss = { showUnsavedChangesDialog = false },
+                            onConfirm = onCancel,
+                            type = AlertDialogType.Warning,
+                            confirmText = "Leave",
+                            dismissText = "Stay"
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuotationItemCard(
+    item: QuotationItem,
+    onDelete: () -> Unit,
+    onEdit: (QuotationItem) -> Unit
+) {
+    var showEditDialog by remember { mutableStateOf(false) }
+    val currencyFormatter = remember { NumberFormat.getCurrencyInstance() }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.productName,
+                        style = MaterialTheme.typography.subtitle1,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = item.description,
+                        style = MaterialTheme.typography.body2,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(onClick = { showEditDialog = true }) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = MaterialTheme.colors.primary
+                        )
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colors.error
+                        )
+                    }
+                }
+            }
+
+            Divider()
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Quantity: ${item.quantity} ${item.unit}")
+                    Text("Unit Price: ${currencyFormatter.format(item.unitPrice)}")
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    if (item.discount > 0) {
+                        Text(
+                            "Discount: ${currencyFormatter.format(item.discountAmount)}",
+                            color = MaterialTheme.colors.error
+                        )
+                    }
+                    Text("Tax: ${currencyFormatter.format(item.taxAmount)}")
+                    Text(
+                        "Total: ${currencyFormatter.format(item.total)}",
+                        style = MaterialTheme.typography.subtitle1,
+                        color = MaterialTheme.colors.primary
+                    )
+                }
+            }
+        }
+    }
+
+    if (showEditDialog) {
+        var quantity by remember { mutableStateOf(item.quantity) }
+        var discount by remember { mutableStateOf(item.discount) }
+        
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text("Edit Item") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    OutlinedTextField(
+                        value = quantity.toString(),
+                        onValueChange = { value -> 
+                            quantity = value.toIntOrNull() ?: item.quantity
+                        },
+                        label = { Text("Quantity") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = discount.toString(),
+                        onValueChange = { value -> 
+                            discount = value.toDoubleOrNull() ?: item.discount
+                        },
+                        label = { Text("Discount %") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Preview calculations
+                    val subtotal = quantity * item.unitPrice
+                    val discountAmount = subtotal * (discount / 100)
+                    val taxAmount = (subtotal - discountAmount) * (item.tax / 100)
+                    val total = subtotal - discountAmount + taxAmount
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("Preview:", fontWeight = FontWeight.Bold)
+                        Text("Subtotal: ${currencyFormatter.format(subtotal)}")
+                        Text("Discount: ${currencyFormatter.format(discountAmount)}")
+                        Text("Tax: ${currencyFormatter.format(taxAmount)}")
+                        Text("Total: ${currencyFormatter.format(total)}")
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val subtotal = quantity * item.unitPrice
+                        val discountAmount = subtotal * (discount / 100)
+                        val taxAmount = (subtotal - discountAmount) * (item.tax / 100)
+                        val total = subtotal - discountAmount + taxAmount
+
+                        onEdit(item.copy(
+                            quantity = quantity,
+                            discount = discount,
+                            discountAmount = discountAmount,
+                            subtotal = subtotal,
+                            taxAmount = taxAmount,
+                            total = total
+                        ))
+                        showEditDialog = false
+                    },
+                    enabled = quantity > 0
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { showEditDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun SummaryRow(
+    label: String,
+    amount: Double,
+    color: Color = MaterialTheme.colors.onSurface,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.body1
+) {
+    val currencyFormatter = remember { NumberFormat.getCurrencyInstance() }
+    
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = style)
+        Text(
+            currencyFormatter.format(amount),
+            style = style,
+            color = color
+        )
+    }
+} 

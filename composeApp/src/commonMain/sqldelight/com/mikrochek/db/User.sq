@@ -1,0 +1,40 @@
+CREATE TABLE User (
+    id TEXT PRIMARY KEY NOT NULL,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    email TEXT UNIQUE,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+insertUser:
+INSERT INTO User(id, username, password_hash, email, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?);
+
+updateUser:
+UPDATE User
+SET username = ?, password_hash = ?, email = ?, updated_at = ?
+WHERE id = ?;
+
+deleteUser:
+DELETE FROM User
+WHERE id = ?;
+
+getUserById:
+SELECT *
+FROM User
+WHERE id = ?;
+
+getUserByUsername:
+SELECT *
+FROM User
+WHERE username = ?;
+
+getUserByEmail:
+SELECT *
+FROM User
+WHERE email = ?;
+
+getAllUsers:
+SELECT *
+FROM User; 

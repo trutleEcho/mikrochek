@@ -1,0 +1,117 @@
+@startuml MikroChek Component Architecture
+
+' Styling
+skinparam component {
+    BackgroundColor #1A1F2C
+    BorderColor #3B82F6
+    ArrowColor #3B82F6
+    FontColor #FFFFFF
+}
+
+skinparam interface {
+    BackgroundColor #1A1F2C
+    BorderColor #3B82F6
+}
+
+skinparam package {
+    BackgroundColor transparent
+    BorderColor #3B82F6
+}
+
+' Layout settings for portrait mode
+skinparam linetype polyline
+skinparam nodesep 80
+skinparam ranksep 100
+top to bottom direction
+
+package "UI Layer" {
+    package "Core Components" {
+        [MainLayout] as ML
+        [Sidebar] as SB
+        [TabBar] as TB
+        [TabContent] as TC
+    }
+    
+    package "Screens" {
+        package "Dashboards" {
+            [Dashboard]
+            [Analytics]
+        }
+        
+        package "Management Screens" {
+            [Quotations]
+            [Products]
+            [PurchaseOrders]
+            [Employees]
+            [Payroll]
+            [KanbanBoard]
+        }
+        
+        package "Auth Screens" {
+            [Authentication]
+        }
+    }
+}
+
+package "State Management" {
+    [UserState] as US
+    [TabManager] as TM
+    [AppMenuItems] as AM
+}
+
+package "Navigation" {
+    [NavController] as NC
+    [NavDestination] as ND
+}
+
+package "Theme" {
+    [AppColors]
+    [AppTypography]
+    [AppShapes]
+}
+
+package "Data Layer" {
+    interface "AuthRepository" as AR
+    interface "UserRepository" as UR
+    
+    package "Models" {
+        [User]
+        [Tab]
+        [AppMenuItem]
+        [ToastData]
+    }
+}
+
+' Vertical Relationships with clear spacing
+ML -[#3B82F6]down-> SB : contains
+ML -[#3B82F6]down-> TB : contains
+ML -[#3B82F6]down-> TC : contains
+
+TC -[#3B82F6]down-> [Dashboard]
+TC -[#3B82F6]down-> [Analytics]
+TC -[#3B82F6]down-> [Quotations]
+TC -[#3B82F6]down-> [Products]
+TC -[#3B82F6]down-> [PurchaseOrders]
+TC -[#3B82F6]down-> [Employees]
+TC -[#3B82F6]down-> [Payroll]
+TC -[#3B82F6]down-> [KanbanBoard]
+TC -[#3B82F6]down-> [Authentication]
+
+ML -[#3B82F6]down-> US : uses
+ML -[#3B82F6]down-> TM : uses
+ML -[#3B82F6]down-> NC : uses
+ML -[#3B82F6]down-> AR : uses
+ML -[#3B82F6]down-> UR : uses
+
+SB -[#3B82F6]down-> AM : uses
+SB -[#3B82F6]down-> US : uses
+
+TM -[#3B82F6]down-> [Tab] : manages
+US -[#3B82F6]down-> [User] : manages
+AM -[#3B82F6]down-> [AppMenuItem] : uses
+NC -[#3B82F6]down-> ND : uses
+
+[Authentication] -[#3B82F6]down-> AR : uses
+[Authentication] -[#3B82F6]down-> UR : uses
+
+@enduml 

@@ -1,0 +1,91 @@
+@startuml MikroChek Navigation Flow
+
+' Styling
+skinparam sequence {
+    ParticipantBackgroundColor #1A1F2C
+    ParticipantBorderColor #3B82F6
+    ArrowColor #3B82F6
+    LifeLineBorderColor #3B82F6
+    LifeLineBackgroundColor #1A1F2C
+    FontColor #FFFFFF
+}
+
+' Layout settings for portrait mode
+skinparam ParticipantPadding 30
+skinparam BoxPadding 20
+skinparam SequenceGroupBodyBackgroundColor transparent
+skinparam MaxMessageSize 200
+skinparam SequenceGroupHeaderFontSize 14
+skinparam SequenceMessageAlignment center
+
+actor User
+participant "Sidebar" as Sidebar
+participant "MainLayout" as MainLayout
+participant "TabManager" as TabManager
+participant "UserState" as UserState
+participant "AppMenuItems" as AppMenuItems
+
+box "Navigation Flow" #1A1F2C
+group Menu Item Navigation
+    User -> Sidebar: Click menu item
+    activate Sidebar
+
+    Sidebar -> AppMenuItems: getMenuItemsByCategory()
+    activate AppMenuItems
+    return menu items
+
+    Sidebar -> MainLayout: onNavigate(route)
+    activate MainLayout
+
+    MainLayout -> UserState: isUserValid()
+    activate UserState
+    return validation
+
+    alt User is not valid
+        MainLayout -> MainLayout: handleAuthError()
+        MainLayout --> Sidebar: return
+        Sidebar --> User: Show error
+    else User is valid
+        MainLayout -> TabManager: getCurrentTab()
+        activate TabManager
+        return current tab
+        
+        alt Tab exists
+            MainLayout -> TabManager: updateTab()
+        else No tab
+            MainLayout -> TabManager: addTab()
+        end
+        
+        MainLayout --> Sidebar: Complete
+        deactivate MainLayout
+        
+        Sidebar -> Sidebar: Update UI
+        Sidebar --> User: Feedback
+    end
+    deactivate Sidebar
+end
+
+group Logout Flow
+    User -> Sidebar: Click logout
+    activate Sidebar
+    Sidebar -> MainLayout: onLogout()
+    activate MainLayout
+
+    MainLayout -> UserState: clearSession()
+    activate UserState
+    return cleared
+
+    MainLayout -> TabManager: clear()
+    activate TabManager
+    return cleared
+
+    MainLayout -> MainLayout: To Login
+    MainLayout --> Sidebar: Complete
+    deactivate MainLayout
+
+    Sidebar --> User: Show toast
+    deactivate Sidebar
+end
+end box
+
+@enduml 

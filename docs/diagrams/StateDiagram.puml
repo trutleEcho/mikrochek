@@ -1,0 +1,89 @@
+@startuml MikroChek State Diagram
+
+' Styling
+skinparam state {
+    BackgroundColor #1A1F2C
+    BorderColor #3B82F6
+    ArrowColor #3B82F6
+    FontColor #FFFFFF
+}
+
+skinparam arrow {
+    Color #3B82F6
+    FontColor #FFFFFF
+}
+
+' Layout direction
+left to right direction
+skinparam nodesep 50
+skinparam ranksep 70
+
+[*] --> NotAuthenticated
+
+state NotAuthenticated {
+    [*] -down-> LoginScreen
+    LoginScreen -right-> SignupScreen : Click signup
+    SignupScreen -left-> LoginScreen : Click login
+    LoginScreen -down-> Authenticating : Submit credentials
+    Authenticating -up-> LoginScreen : Auth error
+}
+
+state Authenticated {
+    state "Dashboard View" as DashboardView {
+        [*] -down-> MainDashboard
+        MainDashboard -down-> AnalyticsDashboard : Switch view
+    }
+
+    state "Management Views" as ManagementViews {
+        state "Quotation Management" as QuotationMgmt {
+            [*] -down-> QuotationsList
+            QuotationsList -down-> QuotationCreate : New quotation
+            QuotationsList -right-> QuotationEdit : Edit quotation
+            QuotationsList -left-> QuotationDetails : View details
+            QuotationCreate -up-> QuotationsList : Save/Cancel
+            QuotationEdit -up-> QuotationsList : Save/Cancel
+            QuotationDetails -up-> QuotationsList : Back
+        }
+
+        state "Product Management" as ProductMgmt {
+            [*] -down-> ProductsList
+            ProductsList -down-> ProductCreate : New product
+            ProductsList -right-> ProductEdit : Edit product
+            ProductsList -left-> ProductDetails : View details
+            ProductCreate -up-> ProductsList : Save/Cancel
+            ProductEdit -up-> ProductsList : Save/Cancel
+            ProductDetails -up-> ProductsList : Back
+        }
+
+        state "Purchase Order Management" as POMgmt {
+            [*] -down-> POList
+            POList -down-> POCreate : New PO
+            POList -right-> POEdit : Edit PO
+            POList -left-> PODetails : View details
+            POCreate -up-> POList : Save/Cancel
+            POEdit -up-> POList : Save/Cancel
+            PODetails -up-> POList : Back
+        }
+
+        state "Employee Management" as EmpMgmt {
+            [*] -down-> EmployeesList
+            EmployeesList -down-> EmployeeCreate : Add employee
+            EmployeesList -right-> EmployeeEdit : Edit employee
+            EmployeesList -left-> EmployeeDetails : View details
+            EmployeeCreate -up-> EmployeesList : Save/Cancel
+            EmployeeEdit -up-> EmployeesList : Save/Cancel
+            EmployeeDetails -up-> EmployeesList : Back
+        }
+    }
+
+    state "Workflow View" as WorkflowView {
+        [*] -down-> KanbanBoard
+        KanbanBoard -right-> KanbanEdit : Edit card
+        KanbanEdit -left-> KanbanBoard : Save changes
+    }
+}
+
+Authenticating -down-> Authenticated : Auth success
+Authenticated -up-> NotAuthenticated : Logout/Session expired
+
+@enduml 
