@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mikrochek.components.ActionButton
-import com.mikrochek.components.common.SimpleSearchBar
 import com.mikrochek.components.layout.PageHeader
 import com.mikrochek.navigation.NavDestination
 import com.mikrochek.server.database.models.Employee
@@ -89,17 +88,7 @@ fun EmployeeListScreen(
                 .fillMaxWidth()
                 .padding(vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Search Bar
-            SimpleSearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                placeholder = "Search employees...",
-                modifier = Modifier.weight(1f)
-            )
-            
-            Spacer(modifier = Modifier.width(16.dp))
             
             // Sort controls
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -138,11 +127,15 @@ fun EmployeeListScreen(
             Spacer(modifier = Modifier.width(16.dp))
             
             // Add Employee Button
-            ActionButton(
-                onClick = { onNavigate(NavDestination.EmployeeCreate) },
-                text = "Add Employee",
-                icon = Icons.Default.Add
-            )
+            Box(
+                modifier = Modifier.width(180.dp)
+            ){
+                ActionButton(
+                    onClick = { onNavigate(NavDestination.EmployeeCreate) },
+                    text = "Add Employee",
+                    icon = Icons.Default.Add
+                )
+            }
         }
         
         // Employees Table

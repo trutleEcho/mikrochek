@@ -3,6 +3,7 @@ package com.mikrochek.server.service
 import com.mikrochek.server.database.SQLiteDatabase
 import com.mikrochek.server.database.models.Document
 import com.mikrochek.server.database.models.DocumentType
+import com.mikrochek.utils.TimeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -15,7 +16,7 @@ import kotlin.io.path.exists
 
 class DocumentService {
     private val db = SQLiteDatabase
-    private val json = Json { prettyPrint = true }
+    val json = Json { prettyPrint = true }
     private val baseDocumentPath = Paths.get(System.getProperty("user.home"), "AppData", "Local", "MikroChek", "documents").toString()
 
     init {
@@ -222,7 +223,7 @@ class DocumentService {
             
             val updatedDoc = existingDoc.copy(
                 content = content,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = TimeUtils.getCurrentISTTimestamp(),
                 metadata = metadata
             )
 

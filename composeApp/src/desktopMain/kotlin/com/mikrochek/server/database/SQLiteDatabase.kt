@@ -1,5 +1,6 @@
 package com.mikrochek.server.database
 
+import com.mikrochek.utils.TimeUtils
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
@@ -79,7 +80,7 @@ object SQLiteDatabase {
                         id, name, userName, password, accountType, createdAt, isActive
                     ) VALUES (
                         'admin', 'Admin User', 'admin', 'admin', 'ADMIN', 
-                        ${System.currentTimeMillis()}, 1
+                        ${TimeUtils.getCurrentISTTimestamp()}, 1
                     )
                 """)
 

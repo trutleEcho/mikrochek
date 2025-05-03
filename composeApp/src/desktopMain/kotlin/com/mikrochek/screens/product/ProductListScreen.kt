@@ -31,7 +31,6 @@ import kotlinx.coroutines.launch
 fun ProductListScreen(
     productRepository: ProductRepository,
     onNavigateToEdit: (String?) -> Unit,
-    onNavigate: (NavDestination) -> Unit
 ) {
     var products by remember { mutableStateOf<List<Product>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
@@ -41,19 +40,18 @@ fun ProductListScreen(
     var isLoading by remember { mutableStateOf(true) }
     var showCategoryDialog by remember { mutableStateOf(false) }
     var showStockUpdateDialog by remember { mutableStateOf<Product?>(null) }
-    var currentDestination by remember { mutableStateOf(NavDestination.ProductsList) }
-    
+    var isActiveFilter by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance() }
 
     // Load products
-    LaunchedEffect(searchQuery, selectedCategory, showLowStock) {
+    LaunchedEffect(searchQuery, selectedCategory, showLowStock, isActiveFilter) {
         isLoading = true
         products = when {
             searchQuery.isNotEmpty() -> productRepository.searchProducts(searchQuery)
             selectedCategory != null -> productRepository.getProductsByCategory(selectedCategory!!)
             showLowStock -> productRepository.getLowStockProducts()
-            else -> productRepository.getAllProducts(isActive = true)
+            else -> productRepository.getAllProducts(isActive = isActiveFilter)
         }
         // Extract unique categories
         categories = products.map { it.category }.distinct()
@@ -66,111 +64,121 @@ fun ProductListScreen(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colors.background
         ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            PageHeader(
-                title = "Products",
-                subtitle = "${products.size} products in inventory",
-                actions = {
-                    Box(
-                        modifier = Modifier.width(180.dp)
-                    ){
-                        ActionButton(
-                            icon = Icons.Default.Add,
-                            text = "Add Product",
-                            onClick = { onNavigateToEdit(null) }
-                        )
-                    }
-                }
-            )
-
-            // Filters section
-            Section(
-                title = "Filters",
-                collapsible = true,
-                defaultExpanded = true
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Search
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search products...") },
-                        leadingIcon = { Icon(Icons.Default.Search, null) },
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    // Category filter
-                    OutlinedButton(
-                        onClick = { showCategoryDialog = true }
-                    ) {
-                        Icon(Icons.Default.Category, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(selectedCategory ?: "All Categories")
-                    }
-
-                    // Low stock filter
-                    OutlinedButton(
-                        onClick = { showLowStock = !showLowStock },
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            backgroundColor = if (showLowStock) AppColors.Warning.copy(alpha = 0.1f)
-                            else MaterialTheme.colors.surface
-                        )
-                    ) {
-                        Icon(
-                            Icons.Default.Warning,
-                            null,
-                            tint = if (showLowStock) AppColors.Warning else MaterialTheme.colors.onSurface
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Low Stock")
-                    }
-                }
-            }
-
-            // Products list section
-            Section(
-                title = "Product List",
-                collapsible = true,
-                defaultExpanded = true
-            ) {
-                if (isLoading) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                } else if (products.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No products found",
-                            style = MaterialTheme.typography.h6,
-                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(products) { product ->
-                            ProductCard(
-                                product = product,
-                                currencyFormatter = currencyFormatter,
-                                onEdit = { onNavigateToEdit(product.id) },
-                                onQuickStockUpdate = { showStockUpdateDialog = it }
+                PageHeader(
+                    title = "Products",
+                    subtitle = "${products.size} products in inventory",
+                    actions = {
+                        Box(
+                            modifier = Modifier.width(180.dp)
+                        ) {
+                            ActionButton(
+                                icon = Icons.Default.Add,
+                                text = "Add Product",
+                                onClick = { onNavigateToEdit(null) }
                             )
+                        }
+                    }
+                )
+
+                // Filters section
+                Section(
+                    title = "Filters",
+                    collapsible = true,
+                    defaultExpanded = true
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Search
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search products...") },
+                            leadingIcon = { Icon(Icons.Default.Search, null) },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        // Category filter
+                        Box(
+                            modifier = Modifier.width(180.dp)
+                        ) {
+                            ActionButton(
+                                onClick = { showCategoryDialog = true },
+                                text = "All Categories",
+                                icon = Icons.Default.Category,
+                                outlined = true
+                            )
+                        }
+
+                        // Low stock filter
+                        Box(
+                            modifier = Modifier.width(140.dp)
+                        ) {
+                            ActionButton(
+                                onClick = { showLowStock = !showLowStock },
+                                text = "Low Stock",
+                                icon = Icons.Default.Warning,
+                                outlined = true
+                            )
+                        }
+
+                        // isActive Filter
+                        Box(
+                            modifier = Modifier.width(140.dp)
+                        ) {
+                            ActionButton(
+                                onClick = { isActiveFilter = !isActiveFilter },
+                                text = if (isActiveFilter) "Listed" else "De-Listed",
+                                icon = Icons.Default.AutoMode,
+                                outlined = true
+                            )
+                        }
+                    }
+                }
+
+                // Products list section
+                Section(
+                    title = "Product List",
+                    collapsible = true,
+                    defaultExpanded = true
+                ) {
+                    if (isLoading) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    } else if (products.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No products found",
+                                style = MaterialTheme.typography.h6,
+                                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(products) { product ->
+                                ProductCard(
+                                    product = product,
+                                    currencyFormatter = currencyFormatter,
+                                    onEdit = { onNavigateToEdit(product.id) },
+                                    onQuickStockUpdate = { showStockUpdateDialog = it }
+                                )
                             }
                         }
                     }
@@ -199,7 +207,7 @@ fun ProductListScreen(
                     ) {
                         Text("All Categories")
                     }
-                    
+
                     // List all available categories
                     categories.forEach { category ->
                         TextButton(
@@ -276,10 +284,20 @@ private fun ProductCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    text = product.name,
-                    style = MaterialTheme.typography.h6
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = product.name,
+                        style = MaterialTheme.typography.h6
+                    )
+                    Text(
+                        text = if (product.isActive) "" else "De-Listed",
+                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colors.error
+                    )
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -335,14 +353,14 @@ private fun ProductCard(
                             AppColors.Error else MaterialTheme.colors.onSurface
                     )
                 }
-                
+
                 // Price
                 Text(
                     text = currencyFormatter.format(product.sellingPrice),
                     style = MaterialTheme.typography.h6,
                     color = MaterialTheme.colors.primary
                 )
-                
+
                 // Cost and margin
                 val margin = ((product.sellingPrice - product.costPrice) / product.costPrice * 100)
                 Text(

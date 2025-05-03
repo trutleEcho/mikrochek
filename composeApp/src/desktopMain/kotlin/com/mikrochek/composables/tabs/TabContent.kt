@@ -79,7 +79,6 @@ fun TabContent(
                             handleScreenNavigation(NavDestination.ProductCreate)
                         }
                     },
-                    onNavigate = { newDest -> handleScreenNavigation(newDest) }
                 )
 
                 is NavDestination.ProductDetails -> ProductDetailsScreen(

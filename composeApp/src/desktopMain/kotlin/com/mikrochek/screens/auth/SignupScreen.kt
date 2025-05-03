@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import com.mikrochek.server.database.models.User
 import com.mikrochek.server.database.enum.AccountType
 import com.mikrochek.server.repository.user.UserRepository
+import com.mikrochek.utils.TimeUtils
 
 @Composable
 fun SignupScreen(
@@ -211,7 +212,7 @@ fun SignupScreen(
                                     userName = userName,
                                     password = password,
                                     accountType = AccountType.KUSH,
-                                    createdAt = System.currentTimeMillis(),
+                                    createdAt = TimeUtils.getCurrentISTTimestamp(),
                                     lastLoginAt = null,
                                     isActive = true
                                 )

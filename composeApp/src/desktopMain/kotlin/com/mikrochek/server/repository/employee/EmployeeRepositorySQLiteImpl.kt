@@ -3,6 +3,7 @@ package com.mikrochek.server.repository.employee
 import com.mikrochek.server.database.models.Employee
 import com.mikrochek.server.database.models.EmployeePayroll
 import com.mikrochek.server.database.models.PaymentStatus
+import com.mikrochek.utils.TimeUtils
 import java.time.YearMonth
 import java.util.*
 import kotlin.random.Random
@@ -39,7 +40,7 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
                     phone = "+91${Random.nextLong(7000000000, 9999999999)}",
                     designation = "$department $designation",
                     department = department,
-                    joiningDate = System.currentTimeMillis() - Random.nextLong(100, 1000) * 86400000,
+                    joiningDate = TimeUtils.getCurrentISTTimestamp() - Random.nextLong(100, 1000) * 86400000,
                     basicSalary = basicSalary,
                     allowances = allowances,
                     deductions = deductions,
@@ -48,8 +49,8 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
                     state = listOf("Maharashtra", "Karnataka", "Tamil Nadu", "West Bengal", "Delhi").random(),
                     postalCode = "${Random.nextInt(100000, 999999)}",
                     isActive = isActive,
-                    createdAt = System.currentTimeMillis() - Random.nextLong(100, 365) * 86400000,
-                    updatedAt = System.currentTimeMillis(),
+                    createdAt = TimeUtils.getCurrentISTTimestamp() - Random.nextLong(100, 365) * 86400000,
+                    updatedAt = TimeUtils.getCurrentISTTimestamp(),
                     createdBy = "admin",
                     updatedBy = "admin"
                 )
@@ -89,13 +90,13 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
                         deductions = deductions,
                         netSalary = basicSalary + allowances - deductions,
                         paymentDate = if (status == PaymentStatus.PAID) 
-                            System.currentTimeMillis() - Random.nextLong(1, 15) * 86400000 
+                            TimeUtils.getCurrentISTTimestamp() - Random.nextLong(1, 15) * 86400000
                         else 
                             null,
                         paymentStatus = status,
                         remarks = if (status == PaymentStatus.FAILED) "Transaction failed" else null,
-                        createdAt = System.currentTimeMillis() - Random.nextLong(1, 30) * 86400000,
-                        updatedAt = System.currentTimeMillis(),
+                        createdAt = TimeUtils.getCurrentISTTimestamp() - Random.nextLong(1, 30) * 86400000,
+                        updatedAt = TimeUtils.getCurrentISTTimestamp(),
                         createdBy = "admin",
                         updatedBy = "admin"
                     )
@@ -235,8 +236,8 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
                     paymentDate = null,
                     paymentStatus = PaymentStatus.PENDING,
                     remarks = null,
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis(),
+                    createdAt = TimeUtils.getCurrentISTTimestamp(),
+                    updatedAt = TimeUtils.getCurrentISTTimestamp(),
                     createdBy = "system",
                     updatedBy = "system"
                 )
@@ -251,14 +252,14 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
                 val processedPayroll = if (success) {
                     newPayroll.copy(
                         paymentStatus = PaymentStatus.PAID,
-                        paymentDate = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
+                        paymentDate = TimeUtils.getCurrentISTTimestamp(),
+                        updatedAt = TimeUtils.getCurrentISTTimestamp(),
                         remarks = "Payment successful"
                     )
                 } else {
                     newPayroll.copy(
                         paymentStatus = PaymentStatus.FAILED,
-                        updatedAt = System.currentTimeMillis(),
+                        updatedAt = TimeUtils.getCurrentISTTimestamp(),
                         remarks = "Transaction failed: Insufficient funds"
                     )
                 }
@@ -281,7 +282,7 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
                 // Update to processing status
                 val updatedPayroll = existingPayroll.copy(
                     paymentStatus = PaymentStatus.PROCESSING,
-                    updatedAt = System.currentTimeMillis(),
+                    updatedAt = TimeUtils.getCurrentISTTimestamp(),
                     remarks = "Retrying payment"
                 )
                 payrolls[payrollIndex] = updatedPayroll
@@ -295,14 +296,14 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
                 val finalPayroll = if (success) {
                     updatedPayroll.copy(
                         paymentStatus = PaymentStatus.PAID,
-                        paymentDate = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
+                        paymentDate = TimeUtils.getCurrentISTTimestamp(),
+                        updatedAt = TimeUtils.getCurrentISTTimestamp(),
                         remarks = "Payment successful on retry"
                     )
                 } else {
                     updatedPayroll.copy(
                         paymentStatus = PaymentStatus.FAILED,
-                        updatedAt = System.currentTimeMillis(),
+                        updatedAt = TimeUtils.getCurrentISTTimestamp(),
                         remarks = "Transaction failed again: Insufficient funds"
                     )
                 }
@@ -359,7 +360,7 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
             val updatedPayroll = payroll.copy(
                 paymentStatus = PaymentStatus.PAID,
                 paymentDate = paymentDate,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = TimeUtils.getCurrentISTTimestamp(),
                 remarks = "Manually marked as paid"
             )
             

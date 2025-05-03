@@ -3,6 +3,7 @@ package com.mikrochek.server.repository.employee
 import com.mikrochek.server.database.models.Employee
 import com.mikrochek.server.database.models.EmployeePayroll
 import com.mikrochek.server.database.models.PaymentStatus
+import com.mikrochek.utils.TimeUtils
 import java.time.YearMonth
 import java.util.UUID
 
@@ -105,8 +106,8 @@ class EmployeeRepositoryImpl : EmployeeRepository {
             paymentDate = null,
             paymentStatus = PaymentStatus.PENDING,
             remarks = null,
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
+            createdAt = TimeUtils.getCurrentISTTimestamp(),
+            updatedAt = TimeUtils.getCurrentISTTimestamp(),
             createdBy = "system",
             updatedBy = "system"
         )
@@ -127,7 +128,7 @@ class EmployeeRepositoryImpl : EmployeeRepository {
         getFailedPayrolls().map { payroll ->
             val updated = payroll.copy(
                 paymentStatus = PaymentStatus.PROCESSING,
-                updatedAt = System.currentTimeMillis()
+                updatedAt = TimeUtils.getCurrentISTTimestamp()
             )
             payrolls[payroll.id] = updated
             updated
@@ -139,7 +140,7 @@ class EmployeeRepositoryImpl : EmployeeRepository {
         val updated = payroll.copy(
             paymentStatus = PaymentStatus.PAID,
             paymentDate = paymentDate,
-            updatedAt = System.currentTimeMillis()
+            updatedAt = TimeUtils.getCurrentISTTimestamp()
         )
         payrolls[payrollId] = updated
         updated

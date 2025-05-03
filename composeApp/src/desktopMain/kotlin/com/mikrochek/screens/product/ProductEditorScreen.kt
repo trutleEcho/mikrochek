@@ -24,6 +24,7 @@ import com.mikrochek.server.database.models.Product
 import com.mikrochek.server.database.models.ProductCategory
 import com.mikrochek.server.repository.product.ProductRepository
 import com.mikrochek.theme.AppColors
+import com.mikrochek.utils.TimeUtils
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -64,8 +65,7 @@ fun ProductEditorScreen(
     // Load product and categories
     LaunchedEffect(productId) {
         isLoading = true
-        categories = productRepository.getAllCategories(isActive = true)
-        
+
         if (productId != null) {
             productRepository.getProductById(productId)?.let {
                 product = it
@@ -124,54 +124,49 @@ fun ProductEditorScreen(
                                     }
                                 )
                             }
-                            Button(
-                                onClick = {
-                                    scope.launch {
-                                        val now = System.currentTimeMillis()
-                                        val userId = UserState.currentUser.value?.id ?: "system"
-                                        
-                                        val updatedProduct = Product(
-                                            id = product?.id ?: UUID.randomUUID().toString(),
-                                            code = code.trim(),
-                                            name = name.trim(),
-                                            description = description.trim(),
-                                            category = category.trim(),
-                                            unit = unit.trim(),
-                                            sellingPrice = sellingPrice.toDoubleOrNull() ?: 0.0,
-                                            costPrice = costPrice.toDoubleOrNull() ?: 0.0,
-                                            tax = tax.toDoubleOrNull() ?: 0.0,
-                                            minStock = minStock.toIntOrNull() ?: 0,
-                                            currentStock = currentStock.toIntOrNull() ?: 0,
-                                            isActive = isActive,
-                                            createdAt = product?.createdAt ?: now,
-                                            updatedAt = now,
-                                            createdBy = product?.createdBy ?: userId,
-                                            updatedBy = userId
-                                        )
+                            Box(
+                                modifier = Modifier.width(120.dp)
+                            ){
+                                ActionButton(
+                                    onClick = {
+                                        scope.launch {
+                                            val now = TimeUtils.getCurrentISTTimestamp()
+                                            val userId = UserState.currentUser.value?.id ?: "system"
 
-                                        val result = if (productId == null) {
-                                            productRepository.createProduct(updatedProduct)
-                                        } else {
-                                            productRepository.updateProduct(updatedProduct)
-                                        }
+                                            val updatedProduct = Product(
+                                                id = product?.id ?: UUID.randomUUID().toString(),
+                                                code = code.trim(),
+                                                name = name.trim(),
+                                                description = description.trim(),
+                                                category = category.trim(),
+                                                unit = unit.trim(),
+                                                sellingPrice = sellingPrice.toDoubleOrNull() ?: 0.0,
+                                                costPrice = costPrice.toDoubleOrNull() ?: 0.0,
+                                                tax = tax.toDoubleOrNull() ?: 0.0,
+                                                minStock = minStock.toIntOrNull() ?: 0,
+                                                currentStock = currentStock.toIntOrNull() ?: 0,
+                                                isActive = isActive,
+                                                createdAt = product?.createdAt ?: now,
+                                                updatedAt = now,
+                                                createdBy = product?.createdBy ?: userId,
+                                                updatedBy = userId
+                                            )
 
-                                        result.onSuccess {
-                                            hasUnsavedChanges = false
-                                            onNavigate(NavDestination.ProductsList)
+                                            val result = if (productId == null) {
+                                                productRepository.createProduct(updatedProduct)
+                                            } else {
+                                                productRepository.updateProduct(updatedProduct)
+                                            }
+
+                                            result.onSuccess {
+                                                hasUnsavedChanges = false
+                                                onNavigate(NavDestination.ProductsList)
+                                            }
                                         }
-                                    }
-                                },
-                                enabled = isValid && !isLoading,
-                                colors = ButtonDefaults.buttonColors(
-                                    backgroundColor = MaterialTheme.colors.primary,
-                                    contentColor = MaterialTheme.colors.onPrimary,
-                                    disabledBackgroundColor = MaterialTheme.colors.primary.copy(alpha = 0.3f),
-                                    disabledContentColor = MaterialTheme.colors.onPrimary.copy(alpha = 0.3f)
+                                    },
+                                    text = "Save",
+                                    icon = Icons.Default.Save,
                                 )
-                            ) {
-                                Icon(Icons.Default.Save, contentDescription = "Save")
-                                Spacer(Modifier.width(8.dp))
-                                Text("Save")
                             }
                         }
                     }
@@ -217,14 +212,15 @@ fun ProductEditorScreen(
                                         label = { Text("Product Name") },
                                         modifier = Modifier.fillMaxWidth()
                                     )
-                                    OutlinedButton(
-                                        onClick = { showCategoryDialog = true },
+                                    OutlinedTextField(
+                                        value = category,
+                                        onValueChange = {
+                                            category = it
+                                            hasUnsavedChanges = true
+                                        },
+                                        label = { Text("Catagory") },
                                         modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Default.Category, null)
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(category.ifEmpty { "Select Category" })
-                                    }
+                                    )
                                     OutlinedTextField(
                                         value = unit,
                                         onValueChange = {

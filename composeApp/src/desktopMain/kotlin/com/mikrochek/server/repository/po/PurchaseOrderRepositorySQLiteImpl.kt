@@ -5,6 +5,7 @@ import com.mikrochek.server.database.SQLiteDatabase
 import com.mikrochek.server.database.models.PurchaseOrder
 import com.mikrochek.server.database.models.Document
 import com.mikrochek.server.database.models.DocumentType
+import com.mikrochek.utils.TimeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
@@ -118,7 +119,7 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
                 )
                 stmt.setString(1, json.encodeToString(purchaseOrder))
                 stmt.setString(2, json.encodeToString(metadata))
-                stmt.setLong(3, System.currentTimeMillis())
+                stmt.setLong(3, TimeUtils.getCurrentISTTimestamp())
                 stmt.setString(4, purchaseOrder.poNumber)
                 stmt.setString(5, DocumentType.PURCHASE_ORDER.name)
                 stmt.executeUpdate()

@@ -3,6 +3,7 @@ package com.mikrochek.server.repository.quotation
 import com.mikrochek.server.database.SQLiteDatabase
 import com.mikrochek.server.database.models.Quotation
 import com.mikrochek.server.database.models.QuotationStatus
+import com.mikrochek.utils.TimeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -249,7 +250,7 @@ class QuotationRepositorySQLiteImpl : QuotationRepository {
                 WHERE id = ?
             """).use { stmt ->
                 stmt.setString(1, status.name)
-                stmt.setLong(2, System.currentTimeMillis())
+                stmt.setLong(2, TimeUtils.getCurrentISTTimestamp())
                 stmt.setString(3, id)
                 stmt.executeUpdate()
             }
@@ -269,7 +270,7 @@ class QuotationRepositorySQLiteImpl : QuotationRepository {
                   AND status NOT IN (?, ?, ?)
                 ORDER BY validUntil DESC
             """).use { stmt ->
-                stmt.setLong(1, System.currentTimeMillis())
+                stmt.setLong(1, TimeUtils.getCurrentISTTimestamp())
                 stmt.setString(2, QuotationStatus.APPROVED.name)
                 stmt.setString(3, QuotationStatus.REJECTED.name)
                 stmt.setString(4, QuotationStatus.IN_PRODUCTION.name)

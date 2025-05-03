@@ -1,6 +1,7 @@
 package com.mikrochek.server.database.models
 
 import com.mikrochek.server.database.enum.AccountType
+import com.mikrochek.utils.TimeUtils
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
@@ -16,5 +17,5 @@ data class UpdatedBy(
     val userId: ObjectId,
     val userName: String,
     val accountType: AccountType,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = TimeUtils.getCurrentISTTimestamp()
 )

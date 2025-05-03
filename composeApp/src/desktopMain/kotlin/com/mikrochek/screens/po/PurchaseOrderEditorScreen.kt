@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -11,9 +12,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.mikrochek.components.ActionButton
-import com.mikrochek.components.layout.ContentCard
 import com.mikrochek.components.layout.PageHeader
 import com.mikrochek.components.layout.Section
 import com.mikrochek.navigation.NavDestination
@@ -23,6 +24,7 @@ import com.mikrochek.server.database.models.Product
 import com.mikrochek.server.repository.po.PurchaseOrderRepository
 import com.mikrochek.server.repository.product.ProductRepository
 import com.mikrochek.theme.AppColors
+import com.mikrochek.utils.TimeUtils
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -46,6 +48,7 @@ fun PurchaseOrderEditorScreen(
     var showSaveConfirmation by remember { mutableStateOf(false) }
     var hasUnsavedChanges by remember { mutableStateOf(false) }
     var formErrors by remember { mutableStateOf<List<FormError>>(emptyList()) }
+    var products by remember { mutableStateOf<List<Product>>(emptyList()) }
 
     // Form state
     var poNumber by remember { mutableStateOf("") }
@@ -88,6 +91,7 @@ fun PurchaseOrderEditorScreen(
                 notes = existingPO.notes
             }
         }
+        products = productRepository.getAllProducts(isActive = true)
         isLoading = false
     }
 
@@ -122,7 +126,7 @@ fun PurchaseOrderEditorScreen(
             vendorName = vendorName,
             vendorAddress = vendorAddress,
             vendorContact = vendorContact,
-            issueDate = System.currentTimeMillis(),
+            issueDate = TimeUtils.getCurrentISTTimestamp(),
             deliveryDate = deliveryDate.toEpochDay(),
             items = items,
             terms = terms,
@@ -316,7 +320,10 @@ fun PurchaseOrderEditorScreen(
                                     )
                                     DropdownMenu(
                                         expanded = expanded,
-                                        onDismissRequest = { expanded = false }
+                                        onDismissRequest = { expanded = false },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(MaterialTheme.colors.surface)
                                     ) {
                                         listOf(
                                             "DRAFT",
@@ -416,7 +423,7 @@ fun PurchaseOrderEditorScreen(
                                             items = items.filter { it != item }
                                             hasUnsavedChanges = true
                                         },
-                                        onQuantityChange = { newQuantity ->
+                                        onQuantityChange = { newQuantity: Int ->
                                             items = items.map {
                                                 if (it == item) it.copy(quantity = newQuantity)
                                                 else it
@@ -488,10 +495,15 @@ fun PurchaseOrderEditorScreen(
             title = { Text("Add Item") },
             text = {
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
                 ) {
                     // Product Dropdown
-                    Box {
+                    Box(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         var expanded by remember { mutableStateOf(false) }
                         OutlinedTextField(
                             value = selectedProduct?.name ?: "",
@@ -507,17 +519,28 @@ fun PurchaseOrderEditorScreen(
                         )
                         DropdownMenu(
                             expanded = expanded,
-                            onDismissRequest = { expanded = false }
+                            onDismissRequest = { expanded = false },
+                            modifier = Modifier
+                                .width(IntrinsicSize.Max)
+                                .heightIn(max = 300.dp)
+                                .background(MaterialTheme.colors.surface)
                         ) {
-                            // TODO: Load products from repository
-                            listOf<Product>().forEach { product ->
+                            products.forEach { product ->
                                 DropdownMenuItem(
                                     onClick = {
                                         selectedProduct = product
+                                        unitPrice = product.sellingPrice.toString()
                                         expanded = false
                                     }
                                 ) {
-                                    Text(product.name)
+                                    Column {
+                                        Text(product.name)
+                                        Text(
+                                            "Price: ${currencyFormatter.format(product.sellingPrice)}",
+                                            style = MaterialTheme.typography.caption,
+                                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -525,43 +548,82 @@ fun PurchaseOrderEditorScreen(
 
                     OutlinedTextField(
                         value = quantity,
-                        onValueChange = { quantity = it },
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.toIntOrNull() != null) {
+                                quantity = newValue
+                            }
+                        },
                         label = { Text("Quantity") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     OutlinedTextField(
                         value = unitPrice,
-                        onValueChange = { unitPrice = it },
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.toDoubleOrNull() != null) {
+                                unitPrice = newValue
+                            }
+                        },
                         label = { Text("Unit Price") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    // Show total
+                    if (selectedProduct != null && quantity.isNotEmpty() && unitPrice.isNotEmpty()) {
+                        val qty = quantity.toIntOrNull() ?: 0
+                        val price = unitPrice.toDoubleOrNull() ?: 0.0
+                        Text(
+                            "Total: ${currencyFormatter.format(qty * price)}",
+                            style = MaterialTheme.typography.subtitle1,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                    }
                 }
             },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         selectedProduct?.let { product ->
-                            val newItem = PurchaseOrderItem(
-                                id = UUID.randomUUID().toString(),
-                                product = product,
-                                quantity = quantity.toIntOrNull() ?: 0,
-                                unitPrice = unitPrice.toDoubleOrNull() ?: product.sellingPrice
-                            )
-                            items = items + newItem
-                            hasUnsavedChanges = true
+                            val qtyValue = quantity.toIntOrNull() ?: 0
+                            val priceValue = unitPrice.toDoubleOrNull() ?: product.sellingPrice
+                            if (qtyValue > 0) {
+                                val newItem = PurchaseOrderItem(
+                                    id = UUID.randomUUID().toString(),
+                                    product = product,
+                                    quantity = qtyValue,
+                                    unitPrice = priceValue
+                                )
+                                items = items + newItem
+                                hasUnsavedChanges = true
+                                showProductSelector = false
+                                selectedProduct = null
+                                quantity = "1"
+                                unitPrice = "0.00"
+                            }
                         }
+                    },
+                    enabled = selectedProduct != null &&
+                            quantity.isNotEmpty() &&
+                            (quantity.toIntOrNull() ?: 0) > 0 &&
+                            unitPrice.isNotEmpty() &&
+                            (unitPrice.toDoubleOrNull() ?: 0.0) > 0.0
+                ) {
+                    Text("Add")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
                         showProductSelector = false
                         selectedProduct = null
                         quantity = "1"
                         unitPrice = "0.00"
                     }
                 ) {
-                    Text("Add")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showProductSelector = false }) {
                     Text("Cancel")
                 }
             }
@@ -570,7 +632,7 @@ fun PurchaseOrderEditorScreen(
 }
 
 @Composable
-private fun PurchaseOrderItemRow(
+fun PurchaseOrderItemRow(
     item: PurchaseOrderItem,
     onDelete: () -> Unit,
     onQuantityChange: (Int) -> Unit
@@ -643,4 +705,4 @@ private fun PurchaseOrderItemRow(
             }
         }
     }
-} 
+}

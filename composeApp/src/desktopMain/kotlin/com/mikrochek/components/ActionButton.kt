@@ -1,5 +1,6 @@
 package com.mikrochek.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
@@ -16,15 +17,18 @@ fun ActionButton(
     text: String,
     icon: ImageVector,
     onClick: () -> Unit,
+
     backgroundColor: Color = MaterialTheme.colors.primary,
-    description: String? = null
+    description: String? = null,
+    outlined: Boolean = false
 ) {
     Surface(
         modifier = Modifier
             .height(48.dp)
             .fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = backgroundColor,
+        color = if (outlined) Color.Transparent else backgroundColor,
+        border = if (outlined) BorderStroke(1.dp, MaterialTheme.colors.primary) else null,
         onClick = onClick
     ) {
         Row(

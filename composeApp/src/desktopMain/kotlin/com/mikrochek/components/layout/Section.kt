@@ -41,11 +41,11 @@ fun Section(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = if (collapsible) {
                         Modifier.clickable { expanded = !expanded }
-                    } else Modifier
+                    } else Modifier.fillMaxWidth()
                 ) {
                     Text(
                         text = title,
@@ -62,7 +62,7 @@ fun Section(
                 }
                 actions?.invoke()
             }
-            
+            Divider()
             if (!collapsible || expanded) {
                 content()
             }

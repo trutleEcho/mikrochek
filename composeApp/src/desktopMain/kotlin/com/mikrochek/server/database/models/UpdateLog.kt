@@ -1,6 +1,7 @@
 package com.mikrochek.server.database.models
 
 import com.mikrochek.server.database.enum.AccountType
+import com.mikrochek.utils.TimeUtils
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import org.bson.codecs.pojo.annotations.BsonId
@@ -19,5 +20,5 @@ data class UpdateLog(
     val previousValues: Map<String, String>,
     val description: String,
     val updatedBy: UpdatedBy,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = TimeUtils.getCurrentISTTimestamp()
 )

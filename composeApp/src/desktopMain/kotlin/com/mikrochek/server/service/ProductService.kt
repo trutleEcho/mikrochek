@@ -4,6 +4,7 @@ import com.mikrochek.server.database.models.Product
 import com.mikrochek.server.database.models.ProductCategory
 import com.mikrochek.server.repository.product.ProductRepository
 import com.mikrochek.server.repository.product.ProductRepositorySQLiteImpl
+import com.mikrochek.utils.TimeUtils
 import java.util.UUID
 
 class ProductService {
@@ -35,8 +36,8 @@ class ProductService {
             minStock = minStock,
             currentStock = currentStock,
             isActive = true,
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
+            createdAt = TimeUtils.getCurrentISTTimestamp(),
+            updatedAt = TimeUtils.getCurrentISTTimestamp(),
             createdBy = userId,
             updatedBy = userId
         )
@@ -80,7 +81,7 @@ class ProductService {
             minStock = minStock,
             currentStock = currentStock,
             isActive = isActive,
-            updatedAt = System.currentTimeMillis(),
+            updatedAt = TimeUtils.getCurrentISTTimestamp(),
             updatedBy = userId
         )
         
@@ -122,8 +123,8 @@ class ProductService {
             name = name,
             description = description,
             isActive = true,
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
+            createdAt = TimeUtils.getCurrentISTTimestamp(),
+            updatedAt = TimeUtils.getCurrentISTTimestamp(),
             createdBy = userId,
             updatedBy = userId
         )
@@ -147,7 +148,7 @@ class ProductService {
             name = name,
             description = description,
             isActive = isActive,
-            updatedAt = System.currentTimeMillis(),
+            updatedAt = TimeUtils.getCurrentISTTimestamp(),
             updatedBy = userId
         )
         

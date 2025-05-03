@@ -3,6 +3,7 @@ package com.mikrochek.screens.quotation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -11,19 +12,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.mikrochek.components.ActionButton
 import com.mikrochek.components.common.*
-import com.mikrochek.components.layout.ContentCard
 import com.mikrochek.components.layout.PageHeader
 import com.mikrochek.components.layout.Section
 import com.mikrochek.navigation.NavDestination
 import com.mikrochek.server.database.models.*
-import com.mikrochek.server.repository.quotation.QuotationRepository
 import com.mikrochek.server.service.DocumentService
 import com.mikrochek.server.service.ProductService
-import com.mikrochek.theme.AppColors
 import com.mikrochek.theme.AppTheme
+import com.mikrochek.utils.TimeUtils
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -50,11 +50,11 @@ fun QuotationEditorScreen(
             mutableStateOf(
                 Quotation(
                     id = quotationId ?: UUID.randomUUID().toString(),
-                    quotationNumber = "QT-${System.currentTimeMillis()}",
+                    quotationNumber = "QT-${TimeUtils.getCurrentISTTimestamp()}",
                     customerId = "",
                     customerName = "",
-                    date = System.currentTimeMillis(),
-                    validUntil = System.currentTimeMillis() + ChronoUnit.DAYS.getDuration().toMillis() * 30,
+                    date = TimeUtils.getCurrentISTTimestamp(),
+                    validUntil = TimeUtils.getCurrentISTTimestamp() + ChronoUnit.DAYS.getDuration().toMillis() * 30,
                     items = emptyList(),
                     subtotal = 0.0,
                     discountTotal = 0.0,
@@ -63,8 +63,8 @@ fun QuotationEditorScreen(
                     notes = null,
                     terms = null,
                     status = QuotationStatus.DRAFT,
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis(),
+                    createdAt = TimeUtils.getCurrentISTTimestamp(),
+                    updatedAt = TimeUtils.getCurrentISTTimestamp(),
                     createdBy = userId,
                     updatedBy = userId
                 )
@@ -124,7 +124,7 @@ fun QuotationEditorScreen(
                 discountTotal = discountTotal,
                 taxTotal = taxTotal,
                 total = total,
-                updatedAt = System.currentTimeMillis()
+                updatedAt = TimeUtils.getCurrentISTTimestamp()
             )
         }
 
@@ -168,7 +168,7 @@ fun QuotationEditorScreen(
                                             scope.launch {
                                                 try {
                                                     val updatedQuotation = quotation.copy(
-                                                        updatedAt = System.currentTimeMillis(),
+                                                        updatedAt = TimeUtils.getCurrentISTTimestamp(),
                                                         updatedBy = userId
                                                     )
                                                     
@@ -324,11 +324,15 @@ fun QuotationEditorScreen(
                                         style = MaterialTheme.typography.subtitle1
                                     )
                                     
-                                    ActionButton(
-                                        text = "Add Item",
-                                        icon = Icons.Default.Add,
-                                        onClick = { showAddItemDialog = true }
-                                    )
+                                    Box(
+                                        modifier = Modifier.width(160.dp)
+                                    ){
+                                        ActionButton(
+                                            text = "Add Item",
+                                            icon = Icons.Default.Add,
+                                            onClick = { showAddItemDialog = true }
+                                        )
+                                    }
                                 }
                                 
                                 if (quotation.items.isEmpty()) {
@@ -439,31 +443,47 @@ fun QuotationEditorScreen(
                             title = { Text("Add Item") },
                             text = {
                                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    // Product selection
-                                    ExposedDropdownMenuBox(
-                                        expanded = false,
-                                        onExpandedChange = { }
+                                    // Product Dropdown
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
+                                        var expanded by remember { mutableStateOf(false) }
                                         OutlinedTextField(
                                             value = selectedProduct?.name ?: "",
                                             onValueChange = { },
                                             label = { Text("Select Product") },
                                             readOnly = true,
-                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(false) },
+                                            trailingIcon = {
+                                                IconButton(onClick = { expanded = true }) {
+                                                    Icon(Icons.Default.ArrowDropDown, "Select product")
+                                                }
+                                            },
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                         
                                         DropdownMenu(
-                                            expanded = false,
-                                            onDismissRequest = { }
+                                            expanded = expanded,
+                                            onDismissRequest = { expanded = false },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 300.dp)
+                                                .background(MaterialTheme.colors.surface)
                                         ) {
                                             products.forEach { product ->
                                                 DropdownMenuItem(
                                                     onClick = {
                                                         selectedProduct = product
+                                                        expanded = false
                                                     }
                                                 ) {
-                                                    Text(product.name)
+                                                    Column {
+                                                        Text(product.name)
+                                                        Text(
+                                                            "Price: ${currencyFormatter.format(product.sellingPrice)}",
+                                                            style = MaterialTheme.typography.caption,
+                                                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -472,20 +492,28 @@ fun QuotationEditorScreen(
                                     // Quantity
                                     OutlinedTextField(
                                         value = quantity.toString(),
-                                        onValueChange = { value -> 
-                                            quantity = value.toIntOrNull() ?: 1
+                                        onValueChange = { newValue -> 
+                                            if (newValue.isEmpty() || newValue.toIntOrNull() != null) {
+                                                quantity = newValue.toIntOrNull() ?: 1
+                                            }
                                         },
                                         label = { Text("Quantity") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
                                         modifier = Modifier.fillMaxWidth()
                                     )
 
                                     // Discount
                                     OutlinedTextField(
                                         value = discount.toString(),
-                                        onValueChange = { value -> 
-                                            discount = value.toDoubleOrNull() ?: 0.0
+                                        onValueChange = { newValue -> 
+                                            if (newValue.isEmpty() || newValue.toDoubleOrNull() != null) {
+                                                discount = newValue.toDoubleOrNull() ?: 0.0
+                                            }
                                         },
                                         label = { Text("Discount %") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        singleLine = true,
                                         modifier = Modifier.fillMaxWidth()
                                     )
 
@@ -497,14 +525,24 @@ fun QuotationEditorScreen(
                                         val total = subtotal - discountAmount + taxAmount
 
                                         Column(
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 8.dp),
                                             verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
-                                            Text("Preview:", fontWeight = FontWeight.Bold)
-                                            Text("Subtotal: ${currencyFormatter.format(subtotal)}")
-                                            Text("Discount: ${currencyFormatter.format(discountAmount)}")
-                                            Text("Tax: ${currencyFormatter.format(taxAmount)}")
-                                            Text("Total: ${currencyFormatter.format(total)}")
+                                            Text(
+                                                "Preview:",
+                                                style = MaterialTheme.typography.subtitle1,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            SummaryRow("Subtotal:", subtotal)
+                                            SummaryRow("Discount:", discountAmount)
+                                            SummaryRow("Tax:", taxAmount)
+                                            SummaryRow(
+                                                "Total:",
+                                                total,
+                                                style = MaterialTheme.typography.subtitle1,
+                                            )
                                         }
                                     }
                                 }
@@ -644,7 +682,7 @@ private fun QuotationItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text("Quantity: ${item.quantity} ${item.unit}")
+                    Text("Quantity: ${item.quantity} x ${item.unit} x Unit")
                     Text("Unit Price: ${currencyFormatter.format(item.unitPrice)}")
                 }
                 Column(horizontalAlignment = Alignment.End) {

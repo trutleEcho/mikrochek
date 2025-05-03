@@ -1,5 +1,6 @@
 package com.mikrochek.server.database.models
 
+import com.mikrochek.utils.TimeUtils
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -16,8 +17,8 @@ data class Document(
     val number: String,  // PO-001 or QT-001 format
     val filePath: String,
     val content: String,
-    val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = TimeUtils.getCurrentISTTimestamp(),
+    val updatedAt: Long = TimeUtils.getCurrentISTTimestamp(),
     val createdBy: String,  // User ID
     val metadata: Map<String, String> = emptyMap()  // For additional fields like customer, total amount, etc.
 ) 

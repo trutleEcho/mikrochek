@@ -3,6 +3,7 @@ package com.mikrochek.server.repository.product
 import com.mikrochek.server.database.SQLiteDatabase
 import com.mikrochek.server.database.models.Product
 import com.mikrochek.server.database.models.ProductCategory
+import com.mikrochek.utils.TimeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.ResultSet
@@ -313,7 +314,7 @@ class ProductRepositorySQLiteImpl : ProductRepository {
                 WHERE id = ?
             """).use { stmt ->
                 stmt.setInt(1, quantity)
-                stmt.setLong(2, System.currentTimeMillis())
+                stmt.setLong(2, TimeUtils.getCurrentISTTimestamp())
                 stmt.setString(3, productId)
                 stmt.executeUpdate()
             }
