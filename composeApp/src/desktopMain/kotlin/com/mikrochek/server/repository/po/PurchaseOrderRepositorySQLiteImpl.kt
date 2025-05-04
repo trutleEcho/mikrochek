@@ -15,7 +15,10 @@ import java.sql.ResultSet
 
 class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
     private val db = SQLiteDatabase
-    private val json = Json { prettyPrint = true }
+    private val json = Json { 
+        prettyPrint = true 
+        ignoreUnknownKeys = true
+    }
 
     private fun ResultSet.toDocument(): Document = Document(
         id = getString("id"),
@@ -33,6 +36,7 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
         try {
             val connection = db.getConnection()
             val document = Document(
+                id = purchaseOrder.id,
                 type = DocumentType.PURCHASE_ORDER,
                 number = purchaseOrder.poNumber,
                 filePath = "documents/po/${purchaseOrder.poNumber}.json",
@@ -62,6 +66,8 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
             }
             purchaseOrder
         } catch (e: Exception) {
+            println("Error creating purchase order: ${e.message}")
+            e.printStackTrace()
             throw e
         }
     }
@@ -69,18 +75,28 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
     override suspend fun getPurchaseOrderById(id: String): PurchaseOrder? = withContext(Dispatchers.IO) {
         try {
             val connection = db.getConnection()
+            println("Searching for PO with id/number: $id")
             connection.prepareStatement("""
                 SELECT * FROM documents 
-                WHERE id = ? AND type = ?
+                WHERE (id = ? OR number = ?) AND type = ?
             """).use { stmt ->
                 stmt.setString(1, id)
-                stmt.setString(2, DocumentType.PURCHASE_ORDER.name)
+                stmt.setString(2, id)
+                stmt.setString(3, DocumentType.PURCHASE_ORDER.name)
                 val rs = stmt.executeQuery()
                 if (rs.next()) {
-                    json.decodeFromString(rs.toDocument().content)
-                } else null
+                    val document = rs.toDocument()
+                    println("Found document: $document")
+                    println("Document content: ${document.content}")
+                    json.decodeFromString<PurchaseOrder>(document.content)
+                } else {
+                    println("No purchase order found with id/number: $id")
+                    null
+                }
             }
         } catch (e: Exception) {
+            println("Error getting purchase order by id/number: ${e.message}")
+            e.printStackTrace()
             null
         }
     }
@@ -135,13 +151,15 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
             val connection = db.getConnection()
             connection.prepareStatement("""
                 DELETE FROM documents 
-                WHERE id = ? AND type = ?
+                WHERE number = ? AND type = ?
             """).use { stmt ->
                 stmt.setString(1, id)
                 stmt.setString(2, DocumentType.PURCHASE_ORDER.name)
                 stmt.executeUpdate() > 0
             }
         } catch (e: Exception) {
+            println("Error deleting purchase order: ${e.message}")
+            e.printStackTrace()
             false
         }
     }

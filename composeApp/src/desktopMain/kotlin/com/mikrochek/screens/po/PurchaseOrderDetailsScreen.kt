@@ -39,27 +39,44 @@ fun PurchaseOrderDetailsScreen(
     poId: String
 ) {
     var purchaseOrder by remember { mutableStateOf<PurchaseOrder?>(null) }
-    var currentDestination by remember { mutableStateOf(NavDestination.PurchaseOrderDetails(poId)) }
     var isLoading by remember { mutableStateOf(true) }
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<ToastData?>(null) }
     var deletePO by remember { mutableStateOf(false) }
+
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance() }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("MMM dd, yyyy") }
 
     LaunchedEffect(poId, deletePO) {
-        if (deletePO) {
-            purchaseOrderRepository.deletePurchaseOrder(poId)
-            deletePO = false
-        }
         try {
-            purchaseOrder = purchaseOrderRepository.getPurchaseOrderById(poId)
-            if (purchaseOrder == null) {
+            isLoading = true
+            showError = false
+
+            if (deletePO) {
+                purchaseOrder?.let { po ->
+                    try {
+                        purchaseOrderRepository.deletePurchaseOrder(po.poNumber)
+                        toast = ToastData("Purchase order deleted successfully", ToastType.SUCCESS)
+                        onNavigate(NavDestination.PurchaseOrdersList)
+                    } catch (e: Exception) {
+                        toast = ToastData("Failed to delete purchase order: ${e.message}", ToastType.ERROR)
+                        showError = true
+                        errorMessage = "Failed to delete purchase order: ${e.message}"
+                    }
+                    deletePO = false
+                    return@LaunchedEffect
+                }
+            }
+
+            val loadedPO = purchaseOrderRepository.getPurchaseOrderById(poId)
+            if (loadedPO == null) {
                 errorMessage = "Purchase order not found"
                 showError = true
                 toast = ToastData("Purchase order not found", ToastType.ERROR)
+            } else {
+                purchaseOrder = loadedPO
             }
         } catch (e: Exception) {
             errorMessage = "Failed to load purchase order: ${e.message}"
@@ -76,19 +93,45 @@ fun PurchaseOrderDetailsScreen(
             color = MaterialTheme.colors.background
         ) {
             if (isLoading) {
-                LoadingScreen()
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LoadingScreen()
+                }
             } else if (showError) {
-                ErrorScreen(message = errorMessage)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ErrorScreen(message = errorMessage)
+                }
             } else if (purchaseOrder == null) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "Purchase order not found",
-                        style = MaterialTheme.typography.body1,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Error,
+                            contentDescription = "Not Found",
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colors.error
+                        )
+                        Text(
+                            text = "Purchase order not found",
+                            style = MaterialTheme.typography.h6,
+                            color = MaterialTheme.colors.error
+                        )
+                        Button(
+                            onClick = { onNavigate(NavDestination.PurchaseOrdersList) }
+                        ) {
+                            Text("Back to List")
+                        }
+                    }
                 }
             } else {
                 Column(
@@ -104,21 +147,29 @@ fun PurchaseOrderDetailsScreen(
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                ActionButton(
-                                    text = "Print",
-                                    icon = Icons.Default.Print,
-                                    onClick = { /* TODO: Implement printing */ }
-                                )
-                                ActionButton(
-                                    text = "Edit",
-                                    icon = Icons.Default.Edit,
-                                    onClick = { onNavigate(NavDestination.PurchaseOrderEdit(poId)) }
-                                )
-                                ActionButton(
-                                    text = "Delete",
-                                    icon = Icons.Default.Delete,
-                                    onClick = { showDeleteConfirmation = true }
-                                )
+//                                ActionButton(
+//                                    text = "Print",
+//                                    icon = Icons.Default.Print,
+//                                    onClick = { /* TODO: Implement printing */ }
+//                                )
+                                Box(
+                                    modifier = Modifier.width(120.dp)
+                                ) {
+                                    ActionButton(
+                                        text = "Edit",
+                                        icon = Icons.Default.Edit,
+                                        onClick = { onNavigate(NavDestination.PurchaseOrderEdit(poId)) }
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier.width(120.dp)
+                                ) {
+                                    ActionButton(
+                                        text = "Delete",
+                                        icon = Icons.Default.Delete,
+                                        onClick = { showDeleteConfirmation = true }
+                                    )
+                                }
                             }
                         }
                     )
@@ -252,14 +303,9 @@ fun PurchaseOrderDetailsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        try {
-                            deletePO = true
-                            showDeleteConfirmation = false
-                            toast = ToastData("Purchase order deleted successfully", ToastType.SUCCESS)
-                            onNavigate(NavDestination.PurchaseOrdersList)
-                        } catch (e: Exception) {
-                            toast = ToastData("Failed to delete purchase order: ${e.message}", ToastType.ERROR)
-                        }
+                        deletePO = true
+                        showDeleteConfirmation = false
+                        toast = ToastData("Purchase order deleted successfully", ToastType.SUCCESS)
                     },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colors.error
