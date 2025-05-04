@@ -28,7 +28,7 @@ fun main() {
 
         Window(
             onCloseRequest = ::exitApplication,
-            title = "MikroChek",
+            title = "StreamLine",
             state = windowState,
             icon = iconPainter
         ) {

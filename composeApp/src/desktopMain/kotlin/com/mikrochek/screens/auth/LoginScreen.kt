@@ -70,18 +70,18 @@ fun LoginScreen(
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "Welcome to MikroChek",
+                    text = "Welcome to StreamLine",
                     style = MaterialTheme.typography.h4,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Empowering manufacturing since 2000",
-                    style = MaterialTheme.typography.subtitle1,
-                    color = Color.White.copy(alpha = 0.8f),
-                    textAlign = TextAlign.Center
-                )
+//                Text(
+//                    text = "Empowering manufacturing since 2000",
+//                    style = MaterialTheme.typography.subtitle1,
+//                    color = Color.White.copy(alpha = 0.8f),
+//                    textAlign = TextAlign.Center
+//                )
             }
         }
 

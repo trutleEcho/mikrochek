@@ -206,13 +206,18 @@ fun QuotationsScreen(
             onConfirm = {
                 scope.launch {
                     try {
-                        quotationRepository.deleteQuotation(quotation.id)
-                        showDeleteConfirmation = null
-                        toast = ToastData("Quotation deleted successfully", ToastType.SUCCESS)
+                        val result = quotationRepository.deleteQuotation(quotation.id)
+                        if (result.isSuccess) {
+                            quotations = quotations.filter { it.id != quotation.id }
+                            showDeleteConfirmation = null
+                            toast = ToastData("Quotation deleted successfully", ToastType.SUCCESS)
+                        } else {
+                            throw result.exceptionOrNull() ?: Exception("Failed to delete quotation")
+                        }
                     } catch (e: Exception) {
                         errorMessage = "Failed to delete quotation: ${e.message}"
                         showError = true
-                        toast = ToastData("Failed to delete quotation", ToastType.ERROR)
+                        toast = ToastData("Failed to delete quotation: ${e.message}", ToastType.ERROR)
                     }
                 }
             },

@@ -125,8 +125,8 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
             val connection = db.getConnection()
             connection.prepareStatement("""
                 UPDATE documents 
-                SET content = ?, metadata = ?, updatedAt = ?
-                WHERE number = ? AND type = ?
+                SET content = ?, metadata = ?, updatedAt = ?, number = ?
+                WHERE id = ? AND type = ?
             """).use { stmt ->
                 val metadata = mapOf(
                     "vendorName" to purchaseOrder.vendorName,
@@ -137,11 +137,17 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
                 stmt.setString(2, json.encodeToString(metadata))
                 stmt.setLong(3, TimeUtils.getCurrentISTTimestamp())
                 stmt.setString(4, purchaseOrder.poNumber)
-                stmt.setString(5, DocumentType.PURCHASE_ORDER.name)
-                stmt.executeUpdate()
+                stmt.setString(5, purchaseOrder.id)
+                stmt.setString(6, DocumentType.PURCHASE_ORDER.name)
+                val rowsAffected = stmt.executeUpdate()
+                if (rowsAffected == 0) {
+                    throw Exception("No purchase order found with id: ${purchaseOrder.id}")
+                }
             }
             purchaseOrder
         } catch (e: Exception) {
+            println("Error updating purchase order: ${e.message}")
+            e.printStackTrace()
             throw e
         }
     }

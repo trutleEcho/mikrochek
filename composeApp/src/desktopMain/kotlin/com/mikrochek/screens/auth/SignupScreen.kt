@@ -73,18 +73,18 @@ fun SignupScreen(
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "Join Hermesys",
+                    text = "Create a account",
                     style = MaterialTheme.typography.h4,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Create your account and start managing your business efficiently",
-                    style = MaterialTheme.typography.subtitle1,
-                    color = Color.White.copy(alpha = 0.8f),
-                    textAlign = TextAlign.Center
-                )
+//                Spacer(modifier = Modifier.height(16.dp))
+//                Text(
+//                    text = "Create your account and start managing your business efficiently",
+//                    style = MaterialTheme.typography.subtitle1,
+//                    color = Color.White.copy(alpha = 0.8f),
+//                    textAlign = TextAlign.Center
+//                )
             }
         }
 
@@ -211,7 +211,7 @@ fun SignupScreen(
                                     name = "$firstName $lastName",
                                     userName = userName,
                                     password = password,
-                                    accountType = AccountType.KUSH,
+                                    accountType = AccountType.ADMIN,
                                     createdAt = TimeUtils.getCurrentISTTimestamp(),
                                     lastLoginAt = null,
                                     isActive = true

@@ -3,9 +3,12 @@ package com.mikrochek.screens.workflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
@@ -18,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.mikrochek.components.ActionButton
 import com.mikrochek.components.layout.PageHeader
 import com.mikrochek.navigation.NavDestination
 import com.mikrochek.server.database.models.QuotationStatus
@@ -67,6 +71,7 @@ fun KanbanBoardScreen(
             val stage = when (quotation.status) {
                 QuotationStatus.DRAFT, QuotationStatus.SENT -> WorkflowStage.QUOTATION
                 QuotationStatus.APPROVED -> WorkflowStage.APPROVED
+                QuotationStatus.IN_PRODUCTION -> WorkflowStage.IN_PRODUCTION
                 QuotationStatus.COMPLETED -> WorkflowStage.QUALITY_CHECK
                 QuotationStatus.READY_FOR_DISPATCH -> WorkflowStage.READY_FOR_DISPATCH
                 QuotationStatus.DISPATCHED -> WorkflowStage.DISPATCHED
@@ -87,7 +92,7 @@ fun KanbanBoardScreen(
         
         isLoading = false
     }
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -96,46 +101,25 @@ fun KanbanBoardScreen(
         // Header
         PageHeader(
             title = "Workflow Kanban Board",
-            subtitle = "Track orders from quotation to dispatch"
+            subtitle = "Track orders from quotation to dispatch",
+            actions = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Refresh button
+                    Box(
+                        modifier = Modifier.width(130.dp)
+                    ){
+                        ActionButton(
+                            text = "Refresh",
+                            icon = Icons.Default.Refresh,
+                            onClick = { /* Reload data */ }
+                        )
+                    }
+                }
+            }
         )
-        
-        // Filters and actions
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Toggle for archived items
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Checkbox(
-                    checked = showArchived,
-                    onCheckedChange = { showArchived = it }
-                )
-                Text("Show Archived Items")
-            }
-            
-            // Refresh button
-            Button(
-                onClick = {
-                    // Reload data
-                },
-                colors = ButtonDefaults.buttonColors(
-                    backgroundColor = MaterialTheme.colors.surface
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Refresh"
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Refresh Board")
-            }
-        }
-        
+
         if (isLoading) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -144,29 +128,87 @@ fun KanbanBoardScreen(
                 CircularProgressIndicator()
             }
         } else {
-            // Kanban board (horizontal scrollable container)
-            Row(
+            // Kanban board with horizontal scroll
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(top = 16.dp)
             ) {
-                // Create a column for each workflow stage
-                WorkflowStage.values().forEach { stage ->
-                    val itemsInStage = boardItems.filter { it.stage == stage }
-                    
-                    KanbanColumn(
-                        title = stage.title,
-                        count = itemsInStage.size,
-                        color = stage.color,
-                        items = itemsInStage,
-                        onItemClick = { item ->
-                            if (item.quotationId != null) {
-                                onNavigate(NavDestination.QuotationDetails(item.quotationId))
+                Row(
+                    modifier = Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(end = 16.dp)
+                ) {
+                    // Create a column for each workflow stage
+                    WorkflowStage.values().forEach { stage ->
+                        val itemsInStage = boardItems.filter { it.stage == stage }
+                        
+                        Column(
+                            modifier = Modifier
+                                .width(400.dp)
+                                .padding(end = 16.dp)
+                                .background(
+                                    color = stage.color.copy(alpha = 0.05f),
+                                    shape = MaterialTheme.shapes.medium
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = stage.color.copy(alpha = 0.1f),
+                                    shape = MaterialTheme.shapes.medium
+                                )
+                        ) {
+                            // Stage header
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        color = stage.color.copy(alpha = 0.1f),
+                                        shape = MaterialTheme.shapes.small
+                                    )
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stage.title,
+                                    style = MaterialTheme.typography.h6,
+                                    color = stage.color
+                                )
+                                Surface(
+                                    color = stage.color.copy(alpha = 0.2f),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text(
+                                        text = "${itemsInStage.size}",
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        style = MaterialTheme.typography.caption,
+                                        color = stage.color
+                                    )
+                                }
                             }
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Items list with vertical scroll
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .padding(bottom = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(itemsInStage) { item ->
+                                    KanbanCard(
+                                        item = item,
+                                        onClick = {
+                                            if (item.quotationId != null) {
+                                                onNavigate(NavDestination.QuotationEdit(item.quotationId))
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -38,7 +38,7 @@ object AppColors {
     val Gray500 = Color(0xFF64748B)         // Medium Dark Gray
     val Gray600 = Color(0xFF475569)         // Dark Gray
     val Gray700 = Color(0xFF334155)         // Very Dark Gray
-    val Gray800 = Color(0xFF112140)         // Almost Black
+    val Gray800 = Color(0xFF0F2140)         // Almost Black
     val Gray900 = Color(0xFF0F172A)         // Black
 
     // Light Theme

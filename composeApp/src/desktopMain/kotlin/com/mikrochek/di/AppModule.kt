@@ -3,6 +3,8 @@ package com.mikrochek.di
 import com.mikrochek.config.EnvVariables
 import com.mikrochek.server.repository.auth.AuthRepository
 import com.mikrochek.server.repository.auth.AuthRepositorySQLiteImpl
+import com.mikrochek.server.repository.customer.CustomerRepository
+import com.mikrochek.server.repository.customer.CustomerRepositoryImpl
 import com.mikrochek.server.repository.employee.EmployeeRepository
 import com.mikrochek.server.repository.employee.EmployeeRepositorySQLiteImpl
 import com.mikrochek.server.repository.po.PurchaseOrderRepository
@@ -39,6 +41,7 @@ val appModule: Module = module {
     single<PurchaseOrderRepository> { PurchaseOrderRepositorySQLiteImpl() }
     single<QuotationRepository> { QuotationRepositorySQLiteImpl() }
     single<EmployeeRepository> { EmployeeRepositorySQLiteImpl() }
+    single<CustomerRepository> { CustomerRepositoryImpl() }
     single { DocumentService() }
     single { ProductService() }
 }

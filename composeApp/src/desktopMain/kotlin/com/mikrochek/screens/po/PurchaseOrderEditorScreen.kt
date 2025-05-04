@@ -37,6 +37,7 @@ import com.mikrochek.screens.base.LoadingScreen
 import kotlin.plus
 import kotlin.text.format
 import kotlin.toString
+import com.mikrochek.components.common.DropdownField
 
 data class FormError(
     val field: String,
@@ -103,6 +104,7 @@ fun PurchaseOrderEditorScreen(
             }
             products = productRepository.getAllProducts(isActive = true)
         } catch (e: Exception) {
+            e.printStackTrace()
             toast = ToastData("Failed to load purchase order: ${e.message}", ToastType.ERROR)
         } finally {
             isLoading = false
@@ -149,13 +151,27 @@ fun PurchaseOrderEditorScreen(
                 status = status
             )
 
-            purchaseOrderRepository.createPurchaseOrder(newPO)
+            if (poId != null) {
+                // Update existing PO
+                purchaseOrderRepository.updatePurchaseOrder(newPO)
+            } else {
+                // Create new PO
+                purchaseOrderRepository.createPurchaseOrder(newPO)
+            }
+
             hasUnsavedChanges = false
             showSaveConfirmation = false
-            toast = ToastData("Purchase order saved successfully", ToastType.SUCCESS)
+            toast = ToastData(
+                "Purchase order ${if (poId != null) "updated" else "created"} successfully",
+                ToastType.SUCCESS
+            )
             onNavigate(NavDestination.PurchaseOrdersList)
         } catch (e: Exception) {
-            toast = ToastData("Failed to save purchase order: ${e.message}", ToastType.ERROR)
+            e.printStackTrace()
+            toast = ToastData(
+                "Failed to ${if (poId != null) "update" else "create"} purchase order: ${e.message}",
+                ToastType.ERROR
+            )
         }
     }
 
@@ -361,7 +377,7 @@ fun PurchaseOrderEditorScreen(
                                         modifier = Modifier.align(Alignment.CenterVertically)
                                     )
                                 }
-                                Box(modifier = Modifier.width(120.dp)){
+                                Box(modifier = Modifier.width(120.dp)) {
                                     ActionButton(
                                         text = "Cancel",
                                         icon = Icons.Default.Close,
@@ -374,11 +390,12 @@ fun PurchaseOrderEditorScreen(
                                         }
                                     )
                                 }
-                                Box(modifier = Modifier.width(120.dp)){
+                                Box(modifier = Modifier.width(120.dp)) {
                                     ActionButton(
                                         text = "Save",
                                         icon = Icons.Default.Save,
-                                        onClick = { showSaveConfirmation = true
+                                        onClick = {
+                                            showSaveConfirmation = true
                                         }
                                     )
                                 }
@@ -476,46 +493,23 @@ fun PurchaseOrderEditorScreen(
                                     )
 
                                     // Status Dropdown
-                                    Box {
-                                        var expanded by remember { mutableStateOf(false) }
-                                        OutlinedTextField(
-                                            value = status,
-                                            onValueChange = {},
-                                            label = { Text("Status") },
-                                            readOnly = true,
-                                            trailingIcon = {
-                                                IconButton(onClick = { expanded = true }) {
-                                                    Icon(Icons.Default.ArrowDropDown, "Select status")
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                        DropdownMenu(
-                                            expanded = expanded,
-                                            onDismissRequest = { expanded = false },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(MaterialTheme.colors.surface)
-                                        ) {
-                                            listOf(
-                                                "DRAFT",
-                                                "PENDING",
-                                                "APPROVED",
-                                                "COMPLETED",
-                                                "CANCELLED"
-                                            ).forEach { statusOption ->
-                                                DropdownMenuItem(
-                                                    onClick = {
-                                                        status = statusOption
-                                                        hasUnsavedChanges = true
-                                                        expanded = false
-                                                    }
-                                                ) {
-                                                    Text(statusOption)
-                                                }
-                                            }
-                                        }
-                                    }
+                                    DropdownField(
+                                        value = status,
+                                        onValueChange = { newStatus ->
+                                            status = newStatus
+                                            hasUnsavedChanges = true
+                                        },
+                                        items = listOf(
+                                            "DRAFT",
+                                            "PENDING",
+                                            "APPROVED",
+                                            "COMPLETED",
+                                            "CANCELLED"
+                                        ),
+                                        label = "Status",
+                                        itemToString = { it },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
                                 }
                             }
 
@@ -567,7 +561,7 @@ fun PurchaseOrderEditorScreen(
                                 actions = {
                                     Box(
                                         modifier = Modifier.width(160.dp)
-                                    ){
+                                    ) {
                                         ActionButton(
                                             text = "Add Item",
                                             icon = Icons.Default.Add,
@@ -651,7 +645,6 @@ fun PurchaseOrderEditorScreen(
                                             style = MaterialTheme.typography.subtitle1,
                                             fontWeight = FontWeight.Bold
                                         )
-                                        }
                                     }
                                 }
                             }
@@ -661,6 +654,7 @@ fun PurchaseOrderEditorScreen(
             }
         }
     }
+}
 
 @Composable
 fun PurchaseOrderItemRow(

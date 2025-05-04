@@ -28,6 +28,7 @@ import com.mikrochek.server.repository.quotation.QuotationRepository
 import com.mikrochek.server.service.DocumentService
 import com.mikrochek.server.service.ProductService
 import com.mikrochek.data.UserState
+import com.mikrochek.server.repository.customer.CustomerRepository
 import org.koin.core.context.GlobalContext
 
 @Composable
@@ -40,6 +41,7 @@ fun TabContent(
     // Get repositories
     val productRepository: ProductRepository by GlobalContext.get().inject()
     val purchaseOrderRepository: PurchaseOrderRepository by GlobalContext.get().inject()
+    val customerRepository: CustomerRepository by GlobalContext.get().inject()
 //    val documentService: DocumentService by GlobalContext.get().inject()
     val quotationRepository: QuotationRepository by GlobalContext.get().inject()
     val productService: ProductService by GlobalContext.get().inject()
@@ -66,7 +68,11 @@ fun TabContent(
             when (destination) {
                 // Dashboard
                 NavDestination.MainDashboard -> MainDashboard(
-                    onNavigate = { newDest: NavDestination -> handleScreenNavigation(newDest) }
+                    onNavigate = { newDest: NavDestination -> handleScreenNavigation(newDest) },
+                    purchaseOrderRepository = purchaseOrderRepository,
+                    productRepository = productRepository,
+                    customerRepository = customerRepository,
+                    quotationRepository = quotationRepository
                 )
 
                 // Products

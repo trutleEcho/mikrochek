@@ -150,11 +150,28 @@ class QuotationRepositorySQLiteImpl : QuotationRepository {
     override suspend fun deleteQuotation(id: String): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
             val connection = db.getConnection()
-            connection.prepareStatement("DELETE FROM quotations WHERE id = ?").use { stmt ->
+            println("Attempting to delete quotation with id/number: $id")
+            
+            connection.prepareStatement("""
+                DELETE FROM quotations 
+                WHERE id = ? OR quotationNumber = ?
+            """).use { stmt ->
                 stmt.setString(1, id)
-                Result.success(stmt.executeUpdate() > 0)
+                stmt.setString(2, id)
+                val rowsAffected = stmt.executeUpdate()
+                println("Rows affected by delete: $rowsAffected")
+                
+                if (rowsAffected > 0) {
+                    println("Successfully deleted quotation: $id")
+                    Result.success(true)
+                } else {
+                    println("No quotation found with id/number: $id")
+                    Result.failure(Exception("No quotation found with id/number: $id"))
+                }
             }
         } catch (e: Exception) {
+            println("Error deleting quotation: ${e.message}")
+            e.printStackTrace()
             Result.failure(e)
         }
     }

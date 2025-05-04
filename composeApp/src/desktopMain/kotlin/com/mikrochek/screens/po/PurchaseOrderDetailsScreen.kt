@@ -174,118 +174,101 @@ fun PurchaseOrderDetailsScreen(
                         }
                     )
 
-                    Row(
+                    LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(24.dp)
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
                     ) {
-                        // Left Column - PO Details
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(24.dp)
-                        ) {
-                            // Basic Information Section
-                            Section(
-                                title = "Basic Information",
-                                collapsible = true,
-                                defaultExpanded = true
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(24.dp)
                             ) {
+                                // Left Column - PO Details
                                 Column(
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(24.dp)
                                 ) {
-                                    DetailRow("PO Number", purchaseOrder!!.poNumber)
-                                    DetailRow("Vendor Name", purchaseOrder!!.vendorName)
-                                    DetailRow("Vendor Address", purchaseOrder!!.vendorAddress)
-                                    DetailRow("Vendor Contact", purchaseOrder!!.vendorContact)
-                                    DetailRow(
-                                        "Created Date",
-                                        LocalDateTime.ofInstant(
-                                            Instant.ofEpochMilli(purchaseOrder!!.issueDate),
-                                            ZoneId.systemDefault()
-                                        ).format(dateFormatter)
-                                    )
-                                    DetailRow(
-                                        "Delivery Date",
-                                        TimeUtils.formatTime(purchaseOrder!!.deliveryDate ?: 0L)
-                                    )
-                                    DetailRow("Status", purchaseOrder!!.status)
-                                }
-                            }
+                                    // Basic Information Section
+                                    Section(
+                                        title = "Basic Information",
+                                        collapsible = true,
+                                        defaultExpanded = true
+                                    ) {
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            DetailRow("PO Number", purchaseOrder!!.poNumber)
+                                            DetailRow("Vendor Name", purchaseOrder!!.vendorName)
+                                            DetailRow("Vendor Address", purchaseOrder!!.vendorAddress)
+                                            DetailRow("Vendor Contact", purchaseOrder!!.vendorContact)
+                                            DetailRow(
+                                                "Created Date",
+                                                LocalDateTime.ofInstant(
+                                                    Instant.ofEpochMilli(purchaseOrder!!.issueDate),
+                                                    ZoneId.systemDefault()
+                                                ).format(dateFormatter)
+                                            )
+                                            DetailRow(
+                                                "Delivery Date",
+                                                TimeUtils.formatTime(purchaseOrder!!.deliveryDate ?: 0L)
+                                            )
+                                            DetailRow("Status", purchaseOrder!!.status)
+                                        }
+                                    }
 
-                            // Terms and Notes Section
-                            Section(
-                                title = "Terms and Notes",
-                                collapsible = true,
-                                defaultExpanded = true
-                            ) {
-                                Column(
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    DetailRow("Terms and Conditions", purchaseOrder!!.terms)
-                                    DetailRow("Additional Notes", purchaseOrder!!.notes)
-                                }
-                            }
+                                    // Terms and Notes Section
+                                    Section(
+                                        title = "Terms and Notes",
+                                        collapsible = true,
+                                        defaultExpanded = true
+                                    ) {
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            DetailRow("Terms and Conditions", purchaseOrder!!.terms)
+                                            DetailRow("Additional Notes", purchaseOrder!!.notes)
+                                        }
+                                    }
 
-                            // Audit Information Section
-                            Section(
-                                title = "Audit Information",
-                                collapsible = true,
-                                defaultExpanded = true
-                            ) {
-                                Column(
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    DetailRow(
-                                        "Created At",
-                                        LocalDateTime.ofInstant(
-                                            Instant.ofEpochMilli(purchaseOrder!!.issueDate),
-                                            ZoneId.systemDefault()
-                                        ).format(dateFormatter)
-                                    )
-
-                                    DetailRow("Created By", purchaseOrder!!.issueDate.toString())
-                                }
-                            }
-                        }
-
-                        // Right Column - Items
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(24.dp)
-                        ) {
-                            Section(
-                                title = "Items",
-                                collapsible = true,
-                                defaultExpanded = true
-                            ) {
-                                LazyColumn(
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    items(purchaseOrder!!.items) { item ->
-                                        PurchaseOrderItemDetailRow(item = item)
+                                    // Audit Information Section
+                                    Section(
+                                        title = "Audit Information",
+                                        collapsible = true,
+                                        defaultExpanded = true
+                                    ) {
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            DetailRow(
+                                                "Created At",
+                                                LocalDateTime.ofInstant(
+                                                    Instant.ofEpochMilli(purchaseOrder!!.issueDate),
+                                                    ZoneId.systemDefault()
+                                                ).format(dateFormatter)
+                                            )
+                                            DetailRow("Created By", purchaseOrder!!.issueDate.toString())
+                                        }
                                     }
                                 }
 
-                                Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-                                // Summary
+                                // Right Column - Items
                                 Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(24.dp)
                                 ) {
-                                    SummaryRow(
-                                        label = "Subtotal",
-                                        value = currencyFormatter.format(purchaseOrder!!.subtotal)
-                                    )
-                                    SummaryRow(
-                                        label = "Tax",
-                                        value = currencyFormatter.format(purchaseOrder!!.tax)
-                                    )
-                                    Divider()
-                                    SummaryRow(
-                                        label = "Total",
-                                        value = currencyFormatter.format(purchaseOrder!!.total),
-                                        isTotal = true
-                                    )
+                                    Section(
+                                        title = "Items",
+                                        collapsible = true,
+                                        defaultExpanded = true
+                                    ) {
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            purchaseOrder!!.items.forEach { item ->
+                                                PurchaseOrderItemDetailRow(item = item)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

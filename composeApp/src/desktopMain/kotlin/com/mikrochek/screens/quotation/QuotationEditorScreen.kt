@@ -677,7 +677,7 @@ private fun QuotationItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text("Quantity: ${item.quantity} x ${item.unit} x Unit")
+                    Text("Quantity: ${item.quantity} ${item.unit}")
                     Text("Unit Price: ${currencyFormatter.format(item.unitPrice)}")
                 }
                 Column(horizontalAlignment = Alignment.End) {
