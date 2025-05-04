@@ -47,7 +47,7 @@ fun EmployeeListScreen(
     }
     
     // Filter employees when search query changes
-    LaunchedEffect(searchQuery, employees) {
+    LaunchedEffect(searchQuery, employees,sortByName,sortAscending) {
         filteredEmployees = if (searchQuery.isBlank()) {
             employees
         } else {
@@ -271,16 +271,16 @@ fun EmployeeListScreen(
                                     tint = MaterialTheme.colors.primary
                                 )
                             }
-                            
-                            IconButton(
-                                onClick = { onNavigate(NavDestination.EmployeeDetails(employee.id)) }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Visibility,
-                                    contentDescription = "View employee details",
-                                    tint = MaterialTheme.colors.primary
-                                )
-                            }
+//
+//                            IconButton(
+//                                onClick = { onNavigate(NavDestination.EmployeeDetails(employee.id)) }
+//                            ) {
+//                                Icon(
+//                                    imageVector = Icons.Default.Visibility,
+//                                    contentDescription = "View employee details",
+//                                    tint = MaterialTheme.colors.primary
+//                                )
+//                            }
                         }
                     }
                     
