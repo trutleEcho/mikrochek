@@ -89,13 +89,6 @@ fun QuotationCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onView) {
-                    Icon(
-                        Icons.Default.Visibility,
-                        contentDescription = "View",
-                        tint = MaterialTheme.colors.primary
-                    )
-                }
                 IconButton(onClick = onEdit) {
                     Icon(
                         Icons.Default.Edit,

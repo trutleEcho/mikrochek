@@ -55,5 +55,4 @@ enum class PaymentStatus {
     PENDING,
     PROCESSING,
     PAID,
-    FAILED
-} 
+}

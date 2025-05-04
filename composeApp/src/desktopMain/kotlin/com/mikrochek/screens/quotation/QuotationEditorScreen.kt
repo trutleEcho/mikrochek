@@ -1,6 +1,5 @@
 package com.mikrochek.screens.quotation
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
@@ -20,24 +19,29 @@ import com.mikrochek.components.layout.PageHeader
 import com.mikrochek.components.layout.Section
 import com.mikrochek.navigation.NavDestination
 import com.mikrochek.server.database.models.*
-import com.mikrochek.server.service.DocumentService
+import com.mikrochek.server.repository.quotation.QuotationRepository
 import com.mikrochek.server.service.ProductService
 import com.mikrochek.theme.AppTheme
 import com.mikrochek.utils.TimeUtils
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import com.mikrochek.components.common.DropdownField
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import com.mikrochek.screens.base.LoadingScreen
+import com.mikrochek.components.Toast
+import com.mikrochek.components.ToastData
+import com.mikrochek.components.ToastType
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun QuotationEditorScreen(
-    documentService: DocumentService,
+    quotationRepository: QuotationRepository,
     productService: ProductService,
     quotationId: String? = null,
     userId: String,
@@ -79,6 +83,7 @@ fun QuotationEditorScreen(
         var showUnsavedChangesDialog by remember { mutableStateOf(false) }
         var products by remember { mutableStateOf<List<Product>>(emptyList()) }
         var selectedProduct by remember { mutableStateOf<Product?>(null) }
+        var toast by remember { mutableStateOf<ToastData?>(null) }
         
         val scope = rememberCoroutineScope()
         val currencyFormatter = remember { NumberFormat.getCurrencyInstance() }
@@ -90,6 +95,7 @@ fun QuotationEditorScreen(
             } catch (e: Exception) {
                 errorMessage = "Failed to load products: ${e.message}"
                 showError = true
+                toast = ToastData("Failed to load products", ToastType.ERROR)
             }
         }
 
@@ -97,13 +103,14 @@ fun QuotationEditorScreen(
         LaunchedEffect(quotationId) {
             if (quotationId != null) {
                 try {
-                    val doc = documentService.getDocument(quotationId)
-                    if (doc != null) {
-                        quotation = Json.decodeFromString(doc.content)
+                    val existingQuotation = quotationRepository.getQuotationById(quotationId)
+                    if (existingQuotation != null) {
+                        quotation = existingQuotation
                     }
                 } catch (e: Exception) {
                     errorMessage = "Failed to load quotation: ${e.message}"
                     showError = true
+                    toast = ToastData("Failed to load quotation", ToastType.ERROR)
                 } finally {
                     isLoading = false
                 }
@@ -129,7 +136,6 @@ fun QuotationEditorScreen(
         }
 
         Row(modifier = Modifier.fillMaxSize()) {
-            // Content goes directly here without SideBar
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colors.background
@@ -137,9 +143,9 @@ fun QuotationEditorScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                        .padding(24.dp)
                 ) {
+                    // Header (non-scrollable)
                     PageHeader(
                         title = if (quotationId != null) "Edit Quotation" else "New Quotation",
                         subtitle = if (quotationId != null) "Editing ${quotation.quotationNumber}" else "Create a new quotation",
@@ -173,39 +179,34 @@ fun QuotationEditorScreen(
                                                     )
                                                     
                                                     val result = if (quotationId == null) {
-                                                        documentService.createDocument(
-                                                            type = DocumentType.QUOTATION,
-                                                            content = Json.encodeToString(updatedQuotation),
-                                                            userId = userId,
-                                                            metadata = mapOf(
-                                                                "customerName" to updatedQuotation.customerName,
-                                                                "total" to updatedQuotation.total.toString(),
-                                                                "status" to updatedQuotation.status.toString()
-                                                            )
+                                                        quotationRepository.createQuotation(
+                                                            updatedQuotation
                                                         )
                                                     } else {
-                                                        documentService.updateDocument(
-                                                            id = quotationId,
-                                                            content = Json.encodeToString(updatedQuotation),
-                                                            userId = userId,
-                                                            metadata = mapOf(
-                                                                "customerName" to updatedQuotation.customerName,
-                                                                "total" to updatedQuotation.total.toString(),
-                                                                "status" to updatedQuotation.status.toString()
-                                                            )
+                                                        quotationRepository.updateQuotation(
+                                                            updatedQuotation
                                                         )
                                                     }
 
-                                                    if (result.isSuccess) {
-                                                        hasUnsavedChanges = false
-                                                        onSaved()
-                                                    } else {
-                                                        errorMessage = "Failed to save quotation"
-                                                        showError = true
-                                                    }
+                                                    result.fold(
+                                                        onSuccess = {
+                                                            hasUnsavedChanges = false
+                                                            toast = ToastData(
+                                                                if (quotationId == null) "Quotation created successfully" else "Quotation updated successfully",
+                                                                ToastType.SUCCESS
+                                                            )
+                                                            onSaved()
+                                                        },
+                                                        onFailure = { e ->
+                                                            errorMessage = e.message ?: "Failed to save quotation"
+                                                            showError = true
+                                                            toast = ToastData("Failed to save quotation", ToastType.ERROR)
+                                                        }
+                                                    )
                                                 } catch (e: Exception) {
                                                     errorMessage = e.message ?: "Unknown error occurred"
                                                     showError = true
+                                                    toast = ToastData("Failed to save quotation", ToastType.ERROR)
                                                 }
                                             }
                                         }
@@ -215,408 +216,402 @@ fun QuotationEditorScreen(
                         }
                     )
 
-                    if (isLoading) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().height(200.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    } else {
-                        // Customer Information Section
-                        Section(
-                            title = "Customer Information",
-                            collapsible = true,
-                            defaultExpanded = true
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    // Scrollable content
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        if (isLoading) {
+                            LoadingScreen()
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(24.dp)
                             ) {
-                                OutlinedTextField(
-                                    value = quotation.customerName,
-                                    onValueChange = { 
-                                        quotation = quotation.copy(customerName = it)
-                                        hasUnsavedChanges = true
-                                    },
-                                    label = { Text("Customer Name") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    // Date picker
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            "Quotation Date",
-                                            style = MaterialTheme.typography.caption,
-                                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                                        )
-                                        OutlinedTextField(
-                                            value = LocalDate.ofInstant(
-                                                Instant.ofEpochMilli(quotation.date),
-                                                ZoneId.systemDefault()
-                                            ).toString(),
-                                            onValueChange = { dateStr ->
-                                                try {
-                                                    val date = LocalDate.parse(dateStr)
-                                                    quotation = quotation.copy(
-                                                        date = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                                                    )
-                                                    hasUnsavedChanges = true
-                                                } catch (e: Exception) {
-                                                    // Invalid date format
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    // Valid until picker
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            "Valid Until",
-                                            style = MaterialTheme.typography.caption,
-                                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                                        )
-                                        OutlinedTextField(
-                                            value = LocalDate.ofInstant(
-                                                Instant.ofEpochMilli(quotation.validUntil),
-                                                ZoneId.systemDefault()
-                                            ).toString(),
-                                            onValueChange = { dateStr ->
-                                                try {
-                                                    val date = LocalDate.parse(dateStr)
-                                                    quotation = quotation.copy(
-                                                        validUntil = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                                                    )
-                                                    hasUnsavedChanges = true
-                                                } catch (e: Exception) {
-                                                    // Invalid date format
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Items Section
-                        Section(
-                            title = "Items",
-                            collapsible = true,
-                            defaultExpanded = true
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "${quotation.items.size} items",
-                                        style = MaterialTheme.typography.subtitle1
-                                    )
-                                    
-                                    Box(
-                                        modifier = Modifier.width(160.dp)
-                                    ){
-                                        ActionButton(
-                                            text = "Add Item",
-                                            icon = Icons.Default.Add,
-                                            onClick = { showAddItemDialog = true }
-                                        )
-                                    }
-                                }
-                                
-                                if (quotation.items.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().height(100.dp),
-                                        contentAlignment = Alignment.Center
+                                // Customer Information Section
+                                item {
+                                    Section(
+                                        title = "Customer Information",
+                                        collapsible = true,
+                                        defaultExpanded = true
                                     ) {
-                                        Text(
-                                            text = "No items added yet",
-                                            style = MaterialTheme.typography.body1,
-                                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                                        )
-                                    }
-                                } else {
-                                    LazyColumn(
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        items(quotation.items.size) { index ->
-                                            QuotationItemCard(
-                                                item = quotation.items[index],
-                                                onDelete = {
-                                                    quotation = quotation.copy(
-                                                        items = quotation.items.filterIndexed { i, _ -> i != index }
-                                                    )
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            OutlinedTextField(
+                                                value = quotation.customerName,
+                                                onValueChange = { 
+                                                    quotation = quotation.copy(customerName = it)
                                                     hasUnsavedChanges = true
                                                 },
-                                                onEdit = { updatedItem ->
-                                                    quotation = quotation.copy(
-                                                        items = quotation.items.mapIndexed { i, item ->
-                                                            if (i == index) updatedItem else item
-                                                        }
+                                                label = { Text("Customer Name") },
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                            ) {
+                                                // Date picker
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        "Quotation Date",
+                                                        style = MaterialTheme.typography.caption,
+                                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
                                                     )
-                                                    hasUnsavedChanges = true
+                                                    OutlinedTextField(
+                                                        value = LocalDate.ofInstant(
+                                                            Instant.ofEpochMilli(quotation.date),
+                                                            ZoneId.systemDefault()
+                                                        ).toString(),
+                                                        onValueChange = { dateStr ->
+                                                            try {
+                                                                val date = LocalDate.parse(dateStr)
+                                                                quotation = quotation.copy(
+                                                                    date = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                                                )
+                                                                hasUnsavedChanges = true
+                                                            } catch (e: Exception) {
+                                                                // Invalid date format
+                                                            }
+                                                        },
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
                                                 }
+
+                                                // Valid until picker
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        "Valid Until",
+                                                        style = MaterialTheme.typography.caption,
+                                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                                    )
+                                                    OutlinedTextField(
+                                                        value = LocalDate.ofInstant(
+                                                            Instant.ofEpochMilli(quotation.validUntil),
+                                                            ZoneId.systemDefault()
+                                                        ).toString(),
+                                                        onValueChange = { dateStr ->
+                                                            try {
+                                                                val date = LocalDate.parse(dateStr)
+                                                                quotation = quotation.copy(
+                                                                    validUntil = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                                                )
+                                                                hasUnsavedChanges = true
+                                                            } catch (e: Exception) {
+                                                                // Invalid date format
+                                                            }
+                                                        },
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                }
+                                            }
+
+                                            // Status dropdown
+                                            DropdownField(
+                                                value = quotation.status,
+                                                onValueChange = { newStatus ->
+                                                    quotation = quotation.copy(status = newStatus)
+                                                    hasUnsavedChanges = true
+                                                },
+                                                items = QuotationStatus.values().toList(),
+                                                label = "Status",
+                                                itemToString = { it.name }
                                             )
                                         }
                                     }
                                 }
 
-                                // Summary
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    elevation = 2.dp
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                // Items Section
+                                item {
+                                    Section(
+                                        title = "Items",
+                                        collapsible = true,
+                                        defaultExpanded = true
                                     ) {
-                                        SummaryRow("Subtotal", quotation.subtotal)
-                                        if (quotation.discountTotal > 0) {
-                                            SummaryRow("Discount", -quotation.discountTotal, MaterialTheme.colors.error)
-                                        }
-                                        SummaryRow("Tax", quotation.taxTotal)
-                                        Divider()
-                                        SummaryRow(
-                                            "Total",
-                                            quotation.total,
-                                            MaterialTheme.colors.primary,
-                                            MaterialTheme.typography.h6
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Terms & Notes Section
-                        Section(
-                            title = "Terms & Notes",
-                            collapsible = true,
-                            defaultExpanded = true
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = quotation.terms ?: "",
-                                    onValueChange = { 
-                                        quotation = quotation.copy(terms = it.ifEmpty { null })
-                                        hasUnsavedChanges = true
-                                    },
-                                    label = { Text("Terms & Conditions") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    minLines = 3
-                                )
-
-                                OutlinedTextField(
-                                    value = quotation.notes ?: "",
-                                    onValueChange = { 
-                                        quotation = quotation.copy(notes = it.ifEmpty { null })
-                                        hasUnsavedChanges = true
-                                    },
-                                    label = { Text("Notes") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    minLines = 2
-                                )
-                            }
-                        }
-                    }
-
-                    if (showAddItemDialog) {
-                        var selectedProduct by remember { mutableStateOf<Product?>(null) }
-                        var quantity by remember { mutableStateOf(1) }
-                        var discount by remember { mutableStateOf(0.0) }
-                        
-                        AlertDialog(
-                            onDismissRequest = { showAddItemDialog = false },
-                            title = { Text("Add Item") },
-                            text = {
-                                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    // Product Dropdown
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        var expanded by remember { mutableStateOf(false) }
-                                        OutlinedTextField(
-                                            value = selectedProduct?.name ?: "",
-                                            onValueChange = { },
-                                            label = { Text("Select Product") },
-                                            readOnly = true,
-                                            trailingIcon = {
-                                                IconButton(onClick = { expanded = true }) {
-                                                    Icon(Icons.Default.ArrowDropDown, "Select product")
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                        
-                                        DropdownMenu(
-                                            expanded = expanded,
-                                            onDismissRequest = { expanded = false },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .heightIn(max = 300.dp)
-                                                .background(MaterialTheme.colors.surface)
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(16.dp)
                                         ) {
-                                            products.forEach { product ->
-                                                DropdownMenuItem(
-                                                    onClick = {
-                                                        selectedProduct = product
-                                                        expanded = false
-                                                    }
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "${quotation.items.size} items",
+                                                    style = MaterialTheme.typography.subtitle1
+                                                )
+                                                
+                                                Box(
+                                                    modifier = Modifier.width(160.dp)
+                                                ){
+                                                    ActionButton(
+                                                        text = "Add Item",
+                                                        icon = Icons.Default.Add,
+                                                        onClick = { showAddItemDialog = true }
+                                                    )
+                                                }
+                                            }
+                                            
+                                            if (quotation.items.isEmpty()) {
+                                                Box(
+                                                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                                                    contentAlignment = Alignment.Center
                                                 ) {
-                                                    Column {
-                                                        Text(product.name)
-                                                        Text(
-                                                            "Price: ${currencyFormatter.format(product.sellingPrice)}",
-                                                            style = MaterialTheme.typography.caption,
-                                                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                                    Text(
+                                                        text = "No items added yet",
+                                                        style = MaterialTheme.typography.body1,
+                                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                                    )
+                                                }
+                                            } else {
+                                                Column(
+                                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    quotation.items.forEachIndexed { index, item ->
+                                                        QuotationItemCard(
+                                                            item = item,
+                                                            onDelete = {
+                                                                quotation = quotation.copy(
+                                                                    items = quotation.items.filterIndexed { i, _ -> i != index }
+                                                                )
+                                                                hasUnsavedChanges = true
+                                                            },
+                                                            onEdit = { updatedItem ->
+                                                                quotation = quotation.copy(
+                                                                    items = quotation.items.mapIndexed { i, item ->
+                                                                        if (i == index) updatedItem else item
+                                                                    }
+                                                                )
+                                                                hasUnsavedChanges = true
+                                                            }
                                                         )
                                                     }
                                                 }
                                             }
+
+                                            // Summary
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                elevation = 2.dp
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(16.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    SummaryRow("Subtotal", quotation.subtotal)
+                                                    if (quotation.discountTotal > 0) {
+                                                        SummaryRow("Discount", -quotation.discountTotal, MaterialTheme.colors.error)
+                                                    }
+                                                    SummaryRow("Tax", quotation.taxTotal)
+                                                    Divider()
+                                                    SummaryRow(
+                                                        "Total",
+                                                        quotation.total,
+                                                        MaterialTheme.colors.primary,
+                                                        MaterialTheme.typography.h6
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
+                                }
 
-                                    // Quantity
-                                    OutlinedTextField(
-                                        value = quantity.toString(),
-                                        onValueChange = { newValue -> 
-                                            if (newValue.isEmpty() || newValue.toIntOrNull() != null) {
-                                                quantity = newValue.toIntOrNull() ?: 1
-                                            }
-                                        },
-                                        label = { Text("Quantity") },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    // Discount
-                                    OutlinedTextField(
-                                        value = discount.toString(),
-                                        onValueChange = { newValue -> 
-                                            if (newValue.isEmpty() || newValue.toDoubleOrNull() != null) {
-                                                discount = newValue.toDoubleOrNull() ?: 0.0
-                                            }
-                                        },
-                                        label = { Text("Discount %") },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    // Preview calculations
-                                    selectedProduct?.let { product ->
-                                        val subtotal = quantity * product.sellingPrice
-                                        val discountAmount = subtotal * (discount / 100)
-                                        val taxAmount = (subtotal - discountAmount) * (product.tax / 100)
-                                        val total = subtotal - discountAmount + taxAmount
-
+                                // Terms & Notes Section
+                                item {
+                                    Section(
+                                        title = "Terms & Notes",
+                                        collapsible = true,
+                                        defaultExpanded = true
+                                    ) {
                                         Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(vertical = 8.dp),
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(16.dp)
                                         ) {
-                                            Text(
-                                                "Preview:",
-                                                style = MaterialTheme.typography.subtitle1,
-                                                fontWeight = FontWeight.Bold
+                                            OutlinedTextField(
+                                                value = quotation.terms ?: "",
+                                                onValueChange = { 
+                                                    quotation = quotation.copy(terms = it.ifEmpty { null })
+                                                    hasUnsavedChanges = true
+                                                },
+                                                label = { Text("Terms & Conditions") },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                minLines = 3
                                             )
-                                            SummaryRow("Subtotal:", subtotal)
-                                            SummaryRow("Discount:", discountAmount)
-                                            SummaryRow("Tax:", taxAmount)
-                                            SummaryRow(
-                                                "Total:",
-                                                total,
-                                                style = MaterialTheme.typography.subtitle1,
+
+                                            OutlinedTextField(
+                                                value = quotation.notes ?: "",
+                                                onValueChange = { 
+                                                    quotation = quotation.copy(notes = it.ifEmpty { null })
+                                                    hasUnsavedChanges = true
+                                                },
+                                                label = { Text("Notes") },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                minLines = 2
                                             )
                                         }
                                     }
-                                }
-                            },
-                            confirmButton = {
-                                Button(
-                                    onClick = {
-                                        selectedProduct?.let { product ->
-                                            val subtotal = quantity * product.sellingPrice
-                                            val discountAmount = subtotal * (discount / 100)
-                                            val taxAmount = (subtotal - discountAmount) * (product.tax / 100)
-                                            val total = subtotal - discountAmount + taxAmount
-
-                                            val newItem = QuotationItem(
-                                                productId = product.id,
-                                                productCode = product.code,
-                                                productName = product.name,
-                                                description = product.description,
-                                                quantity = quantity,
-                                                unit = product.unit,
-                                                unitPrice = product.sellingPrice,
-                                                tax = product.tax,
-                                                taxAmount = taxAmount,
-                                                discount = discount,
-                                                discountAmount = discountAmount,
-                                                subtotal = subtotal,
-                                                total = total
-                                            )
-
-                                            quotation = quotation.copy(
-                                                items = quotation.items + newItem
-                                            )
-                                            hasUnsavedChanges = true
-                                            showAddItemDialog = false
-                                        }
-                                    },
-                                    enabled = selectedProduct != null && quantity > 0
-                                ) {
-                                    Text("Add")
-                                }
-                            },
-                            dismissButton = {
-                                Button(onClick = { showAddItemDialog = false }) {
-                                    Text("Cancel")
                                 }
                             }
-                        )
-                    }
-
-                    if (showError) {
-                        AlertDialog(
-                            title = "Error",
-                            message = errorMessage,
-                            onDismiss = { showError = false },
-                            onConfirm = { showError = false },
-                            type = AlertDialogType.Error,
-                            confirmText = "OK"
-                        )
-                    }
-
-                    if (showUnsavedChangesDialog) {
-                        AlertDialog(
-                            title = "Unsaved Changes",
-                            message = "You have unsaved changes. Are you sure you want to leave?",
-                            onDismiss = { showUnsavedChangesDialog = false },
-                            onConfirm = onCancel,
-                            type = AlertDialogType.Warning,
-                            confirmText = "Leave",
-                            dismissText = "Stay"
-                        )
+                        }
                     }
                 }
             }
         }
+
+        if (showAddItemDialog) {
+            var selectedProduct by remember { mutableStateOf<Product?>(null) }
+            var quantity by remember { mutableStateOf(1) }
+            var discount by remember { mutableStateOf(0.0) }
+            
+            AlertDialog(
+                onDismissRequest = { showAddItemDialog = false },
+                title = { Text("Add Item") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        // Product Dropdown
+                        DropdownField(
+                            value = selectedProduct,
+                            onValueChange = { selectedProduct = it },
+                            items = products,
+                            label = "Select Product",
+                            itemToString = { it.name }
+                        )
+
+                        // Quantity
+                        OutlinedTextField(
+                            value = quantity.toString(),
+                            onValueChange = { newValue -> 
+                                if (newValue.isEmpty() || newValue.toIntOrNull() != null) {
+                                    quantity = newValue.toIntOrNull() ?: 1
+                                }
+                            },
+                            label = { Text("Quantity") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Discount
+                        OutlinedTextField(
+                            value = discount.toString(),
+                            onValueChange = { newValue -> 
+                                if (newValue.isEmpty() || newValue.toDoubleOrNull() != null) {
+                                    discount = newValue.toDoubleOrNull() ?: 0.0
+                                }
+                            },
+                            label = { Text("Discount %") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Preview calculations
+                        selectedProduct?.let { product ->
+                            val subtotal = quantity * product.sellingPrice
+                            val discountAmount = subtotal * (discount / 100)
+                            val taxAmount = (subtotal - discountAmount) * (product.tax / 100)
+                            val total = subtotal - discountAmount + taxAmount
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    "Preview:",
+                                    style = MaterialTheme.typography.subtitle1,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                SummaryRow("Subtotal:", subtotal)
+                                SummaryRow("Discount:", discountAmount)
+                                SummaryRow("Tax:", taxAmount)
+                                SummaryRow(
+                                    "Total:",
+                                    total,
+                                    style = MaterialTheme.typography.subtitle1,
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            selectedProduct?.let { product ->
+                                val subtotal = quantity * product.sellingPrice
+                                val discountAmount = subtotal * (discount / 100)
+                                val taxAmount = (subtotal - discountAmount) * (product.tax / 100)
+                                val total = subtotal - discountAmount + taxAmount
+
+                                val newItem = QuotationItem(
+                                    productId = product.id,
+                                    productCode = product.code,
+                                    productName = product.name,
+                                    description = product.description,
+                                    quantity = quantity,
+                                    unit = product.unit,
+                                    unitPrice = product.sellingPrice,
+                                    tax = product.tax,
+                                    taxAmount = taxAmount,
+                                    discount = discount,
+                                    discountAmount = discountAmount,
+                                    subtotal = subtotal,
+                                    total = total
+                                )
+
+                                quotation = quotation.copy(
+                                    items = quotation.items + newItem
+                                )
+                                hasUnsavedChanges = true
+                                showAddItemDialog = false
+                            }
+                        },
+                        enabled = selectedProduct != null && quantity > 0
+                    ) {
+                        Text("Add")
+                    }
+                },
+                dismissButton = {
+                    Button(onClick = { showAddItemDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        if (showError) {
+            AlertDialog(
+                title = "Error",
+                message = errorMessage,
+                onDismiss = { showError = false },
+                onConfirm = { showError = false },
+                type = AlertDialogType.Error,
+                confirmText = "OK"
+            )
+        }
+
+        if (showUnsavedChangesDialog) {
+            AlertDialog(
+                title = "Unsaved Changes",
+                message = "You have unsaved changes. Are you sure you want to leave?",
+                onDismiss = { showUnsavedChangesDialog = false },
+                onConfirm = onCancel,
+                type = AlertDialogType.Warning,
+                confirmText = "Leave",
+                dismissText = "Stay"
+            )
+        }
+
+        // Add toast notification
+        Toast(
+            toast = toast,
+            onDismiss = { toast = null }
+        )
     }
 }
 

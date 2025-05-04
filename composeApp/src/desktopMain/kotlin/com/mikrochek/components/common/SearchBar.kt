@@ -18,7 +18,7 @@ fun SimpleSearchBar(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().height(45.dp),
         elevation = 2.dp,
         shape = MaterialTheme.shapes.medium
     ) {

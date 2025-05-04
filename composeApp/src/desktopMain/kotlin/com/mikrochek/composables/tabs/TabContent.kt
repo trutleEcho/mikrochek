@@ -40,7 +40,7 @@ fun TabContent(
     // Get repositories
     val productRepository: ProductRepository by GlobalContext.get().inject()
     val purchaseOrderRepository: PurchaseOrderRepository by GlobalContext.get().inject()
-    val documentService: DocumentService by GlobalContext.get().inject()
+//    val documentService: DocumentService by GlobalContext.get().inject()
     val quotationRepository: QuotationRepository by GlobalContext.get().inject()
     val productService: ProductService by GlobalContext.get().inject()
     val employeeRepository: EmployeeRepository by GlobalContext.get().inject()
@@ -127,19 +127,18 @@ fun TabContent(
 
                 // Quotations
                 NavDestination.QuotationsList -> QuotationsScreen(
-                    documentService = documentService,
+                    quotationRepository = quotationRepository,
                     onCreateNew = { handleScreenNavigation(NavDestination.QuotationCreate) },
-                    onEditQuotation = { quotationId -> 
+                    onEditQuotation = { quotationId ->
                         handleScreenNavigation(NavDestination.QuotationEdit(quotationId))
                     },
-                    onNavigate = { newDest -> handleScreenNavigation(newDest) }
                 )
 
                 is NavDestination.QuotationEdit -> QuotationEditorScreen(
-                    documentService = documentService,
+                    quotationRepository = quotationRepository,
                     quotationId = destination.quotationId,
                     userId = UserState.getCurrentUser()?.id ?: "",
-                    onSaved = { 
+                    onSaved = {
                         showToast("Quotation updated successfully", ToastType.SUCCESS)
                         tabNavController.navigateBack()
                     },
@@ -149,10 +148,10 @@ fun TabContent(
                 )
 
                 NavDestination.QuotationCreate -> QuotationEditorScreen(
-                    documentService = documentService,
+                    quotationRepository = quotationRepository,
                     quotationId = null,
                     userId = UserState.getCurrentUser()?.id ?: "",
-                    onSaved = { 
+                    onSaved = {
                         showToast("Quotation created successfully", ToastType.SUCCESS)
                         tabNavController.navigateBack()
                     },
@@ -161,48 +160,48 @@ fun TabContent(
                     productService = productService
                 )
 
-                is NavDestination.QuotationDetails -> QuotationsScreen(
-                    documentService = documentService,
-                    onCreateNew = { handleScreenNavigation(NavDestination.QuotationCreate) },
-                    onEditQuotation = { quotationId -> 
-                        handleScreenNavigation(NavDestination.QuotationEdit(quotationId))
-                    },
-                    onNavigate = { newDest -> handleScreenNavigation(newDest) }
-                )
-                
+//                is NavDestination.QuotationDetails -> QuotationsScreen(
+//                    documentService = documentService,
+//                    onCreateNew = { handleScreenNavigation(NavDestination.QuotationCreate) },
+//                    onEditQuotation = { quotationId ->
+//                        handleScreenNavigation(NavDestination.QuotationEdit(quotationId))
+//                    },
+//                )
+
                 // Employee Management
                 NavDestination.EmployeesList -> EmployeeListScreen(
                     onNavigate = { newDest -> handleScreenNavigation(newDest) },
                 )
-                
+
                 NavDestination.EmployeeCreate -> EmployeeFormScreen(
                     employeeId = null,
                     onNavigate = { newDest -> handleScreenNavigation(newDest) },
                     showToast = showToast,
                 )
-                
+
                 is NavDestination.EmployeeEdit -> EmployeeFormScreen(
                     employeeId = destination.employeeId,
                     onNavigate = { newDest -> handleScreenNavigation(newDest) },
                     showToast = showToast,
                 )
-                
+
                 is NavDestination.EmployeeDetails -> Text("Employee Details - Coming Soon")
-                
+
                 // Payroll Management
                 NavDestination.PayrollDashboard -> PayrollDashboard(
-                    onNavigate = { newDest -> handleScreenNavigation(newDest) },
+                    onNavigate = { newDest -> handleScreenNavigation(newDest) }
                 )
-                
+
                 NavDestination.PayrollProcessing -> PayrollProcessingScreen(
                     onNavigate = { newDest -> handleScreenNavigation(newDest) },
+                    onEmployeeDetails = { newDest -> handleScreenNavigation(newDest) },
                     showToast = showToast,
                 )
-                
+
                 is NavDestination.PayrollEmployee -> Text("Employee Payroll - Coming Soon")
-                
+
                 is NavDestination.PayrollDetails -> Text("Payroll Details - Coming Soon")
-                
+
                 // Workflow Management
                 NavDestination.KanbanBoard -> KanbanBoardScreen(
                     onNavigate = { newDest -> handleScreenNavigation(newDest) }
@@ -213,7 +212,7 @@ fun TabContent(
                     errorMessage = "",
                     onRetry = {}
                 )
-                
+
                 else -> {
                     Text("Screen not implemented: $destination")
                 }

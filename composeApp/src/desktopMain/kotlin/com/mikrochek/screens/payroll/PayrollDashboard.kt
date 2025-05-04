@@ -28,6 +28,8 @@ import java.time.Month
 import java.time.format.TextStyle
 import java.util.*
 import kotlin.getValue
+import kotlin.random.Random
+import kotlin.random.nextInt
 
 @Composable
 fun PayrollDashboard(
@@ -48,7 +50,6 @@ fun PayrollDashboard(
     var totalPayroll by remember { mutableStateOf(0.0) }
     var processedCount by remember { mutableStateOf(0) }
     var pendingCount by remember { mutableStateOf(0) }
-    var failedCount by remember { mutableStateOf(0) }
     var employeeCount by remember { mutableStateOf(0) }
     var departmentStats by remember { mutableStateOf(mapOf<String, Double>()) }
     
@@ -69,8 +70,7 @@ fun PayrollDashboard(
         val statusSummary = employeeRepository.getPayrollStatusSummary(selectedMonth, selectedYear)
         processedCount = statusSummary[PaymentStatus.PAID] ?: 0
         pendingCount = statusSummary[PaymentStatus.PENDING] ?: 0
-        failedCount = statusSummary[PaymentStatus.FAILED] ?: 0
-        
+
         // Department salary distribution
         departmentStats = employeeRepository.getAverageSalaryByDepartment()
         
@@ -87,7 +87,6 @@ fun PayrollDashboard(
                 val statusSummary = employeeRepository.getPayrollStatusSummary(selectedMonth, selectedYear)
                 processedCount = statusSummary[PaymentStatus.PAID] ?: 0
                 pendingCount = statusSummary[PaymentStatus.PENDING] ?: 0
-                failedCount = statusSummary[PaymentStatus.FAILED] ?: 0
                 totalPayroll = employeeRepository.getTotalPayrollCost(selectedMonth, selectedYear)
             }
             isProcessing = false
@@ -182,26 +181,13 @@ fun PayrollDashboard(
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                ActionButton(
-                    onClick = { onNavigate(NavDestination.PayrollProcessing) },
-                    text = "Process Payroll",
-                    icon = Icons.Default.CreditCard
-                )
-                
-                if (failedCount > 0) {
+                Box(
+                    modifier = Modifier.width(180.dp)
+                ){
                     ActionButton(
-                        onClick = {
-                            scope.launch {
-                                employeeRepository.retryFailedPayments()
-                                // Refresh data
-                                val statusSummary = employeeRepository.getPayrollStatusSummary(selectedMonth, selectedYear)
-                                processedCount = statusSummary[PaymentStatus.PAID] ?: 0
-                                pendingCount = statusSummary[PaymentStatus.PENDING] ?: 0
-                                failedCount = statusSummary[PaymentStatus.FAILED] ?: 0
-                            }
-                        },
-                        text = "Retry Failed Payments",
-                        icon = Icons.Default.Refresh,
+                        onClick = { onNavigate(NavDestination.PayrollProcessing) },
+                        text = "Process Payroll",
+                        icon = Icons.Default.CreditCard
                     )
                 }
             }
@@ -278,13 +264,6 @@ fun PayrollDashboard(
                                 title = "Pending",
                                 count = pendingCount,
                                 color = AppColors.Warning,
-                                modifier = Modifier.weight(1f)
-                            )
-                            
-                            StatusCard(
-                                title = "Failed",
-                                count = failedCount,
-                                color = AppColors.Error,
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -434,6 +413,6 @@ fun StatusCard(
 
 // Helper function to generate consistent colors based on string input
 fun getRandomColor(input: String): Color {
-    val hue = (input.hashCode() % 360).toFloat()
+    val hue = Random.nextInt(0,360).toFloat()
     return Color.hsv(hue, 0.7f, 0.9f)
 } 

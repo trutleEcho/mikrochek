@@ -82,8 +82,9 @@ class EmployeeRepositoryImpl : EmployeeRepository {
     override fun getPendingPayrolls(): List<EmployeePayroll> =
         payrolls.values.filter { it.paymentStatus == PaymentStatus.PENDING }
 
-    override fun getFailedPayrolls(): List<EmployeePayroll> =
-        payrolls.values.filter { it.paymentStatus == PaymentStatus.FAILED }
+    override fun getFailedPayrolls(): List<EmployeePayroll> {
+        TODO("Not yet implemented")
+    }
 
     // Enhanced Payroll operations
     override fun processPayroll(employeeId: String, month: Int, year: Int): Result<EmployeePayroll> = runCatching {
@@ -124,15 +125,8 @@ class EmployeeRepositoryImpl : EmployeeRepository {
             }
     }
 
-    override fun retryFailedPayments(): Result<List<EmployeePayroll>> = runCatching {
-        getFailedPayrolls().map { payroll ->
-            val updated = payroll.copy(
-                paymentStatus = PaymentStatus.PROCESSING,
-                updatedAt = TimeUtils.getCurrentISTTimestamp()
-            )
-            payrolls[payroll.id] = updated
-            updated
-        }
+    override fun retryFailedPayments(): Result<List<EmployeePayroll>> {
+        TODO("Not yet implemented")
     }
 
     override fun markPayrollAsPaid(payrollId: String, paymentDate: Long): Result<EmployeePayroll> = runCatching {

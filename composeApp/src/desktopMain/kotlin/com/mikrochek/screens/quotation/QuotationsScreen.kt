@@ -30,13 +30,17 @@ import com.mikrochek.server.service.DocumentService
 import com.mikrochek.theme.AppColors
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import com.mikrochek.screens.base.LoadingScreen
+import com.mikrochek.screens.base.ErrorScreen
+import com.mikrochek.components.Toast
+import com.mikrochek.components.ToastData
+import com.mikrochek.components.ToastType
 
 @Composable
 fun QuotationsScreen(
-    documentService: DocumentService,
+    quotationRepository: QuotationRepository,
     onCreateNew: () -> Unit,
     onEditQuotation: (String) -> Unit,
-    onNavigate: (NavDestination) -> Unit
 ) {
     var quotations by remember { mutableStateOf<List<Quotation>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -46,42 +50,40 @@ fun QuotationsScreen(
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var showDeleteConfirmation by remember { mutableStateOf<Quotation?>(null) }
-    
+    var toast by remember { mutableStateOf<ToastData?>(null) }
+
     val scope = rememberCoroutineScope()
 
     // Load quotations
     LaunchedEffect(searchQuery, selectedStatus, dateRange) {
         try {
             isLoading = true
-            val docs = documentService.searchDocuments(
-                type = DocumentType.QUOTATION,
-                query = searchQuery.takeIf { it.isNotBlank() }
-            )
-            quotations = docs.mapNotNull { doc ->
-                try {
-                    Json.decodeFromString<Quotation>(doc.content)
-                } catch (e: Exception) {
-                    null
-                }
-            }.filter { quotation ->
+            val allQuotations = quotationRepository.getAllQuotations()
+            quotations = allQuotations.filter { quotation ->
+                val matchesSearch = searchQuery.isEmpty() || 
+                    quotation.quotationNumber.contains(searchQuery, ignoreCase = true) ||
+                    quotation.customerName.contains(searchQuery, ignoreCase = true)
+                
                 val matchesStatus = selectedStatus?.let { it == quotation.status } ?: true
+                
                 val matchesDateRange = dateRange.let { (start, end) ->
                     val afterStart = start?.let { quotation.date >= it } ?: true
                     val beforeEnd = end?.let { quotation.date <= it } ?: true
                     afterStart && beforeEnd
                 }
-                matchesStatus && matchesDateRange
+                
+                matchesSearch && matchesStatus && matchesDateRange
             }
         } catch (e: Exception) {
             errorMessage = "Failed to load quotations: ${e.message}"
             showError = true
+            toast = ToastData("Failed to load quotations", ToastType.ERROR)
         } finally {
             isLoading = false
         }
     }
 
     Row(modifier = Modifier.fillMaxSize()) {
-        // Content goes directly here without SideBar
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colors.background
@@ -124,12 +126,12 @@ fun QuotationsScreen(
                     elevation = 1.dp
                 ) {
                     if (isLoading) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
+                        LoadingScreen()
+                    } else if (showError) {
+                        ErrorScreen(
+                            message = errorMessage,
+                            modifier = Modifier.padding(16.dp)
+                        )
                     } else if (quotations.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
@@ -166,7 +168,7 @@ fun QuotationsScreen(
                                 QuotationCard(
                                     quotation = quotation,
                                     onEdit = { onEditQuotation(quotation.id) },
-                                    onView = { /* TODO: Implement view action */ },
+                                    onView = { onEditQuotation(quotation.id) },
                                     onDelete = { showDeleteConfirmation = quotation }
                                 )
                             }
@@ -189,6 +191,12 @@ fun QuotationsScreen(
         )
     }
 
+    // Add toast notification
+    Toast(
+        toast = toast,
+        onDismiss = { toast = null }
+    )
+
     // Delete confirmation dialog
     showDeleteConfirmation?.let { quotation ->
         AlertDialog(
@@ -198,11 +206,13 @@ fun QuotationsScreen(
             onConfirm = {
                 scope.launch {
                     try {
-                        documentService.deleteDocument(quotation.id)
+                        quotationRepository.deleteQuotation(quotation.id)
                         showDeleteConfirmation = null
+                        toast = ToastData("Quotation deleted successfully", ToastType.SUCCESS)
                     } catch (e: Exception) {
                         errorMessage = "Failed to delete quotation: ${e.message}"
                         showError = true
+                        toast = ToastData("Failed to delete quotation", ToastType.ERROR)
                     }
                 }
             },

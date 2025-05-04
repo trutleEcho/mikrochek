@@ -51,8 +51,8 @@ class QuotationRepositorySQLiteImpl : QuotationRepository {
                 INSERT INTO quotations (
                     id, quotationNumber, customerId, customerName, date, validUntil,
                     items, subtotal, taxTotal, total, notes, terms, status,
-                    createdAt, updatedAt, createdBy, updatedBy
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    createdAt, updatedAt, createdBy, updatedBy, discountTotal
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """).use { stmt ->
                 stmt.setString(1, quotation.id)
                 stmt.setString(2, quotation.quotationNumber)
@@ -71,6 +71,7 @@ class QuotationRepositorySQLiteImpl : QuotationRepository {
                 stmt.setLong(15, quotation.updatedAt)
                 stmt.setString(16, quotation.createdBy)
                 stmt.setString(17, quotation.updatedBy)
+                stmt.setDouble(18, quotation.discountTotal)
                 
                 println("Executing insert for quotation: ${quotation.quotationNumber}")
                 val result = stmt.executeUpdate()
@@ -119,7 +120,7 @@ class QuotationRepositorySQLiteImpl : QuotationRepository {
                     quotationNumber = ?, customerId = ?, customerName = ?, 
                     date = ?, validUntil = ?, items = ?, subtotal = ?, 
                     taxTotal = ?, total = ?, notes = ?, terms = ?, 
-                    status = ?, updatedAt = ?, updatedBy = ?
+                    status = ?, updatedAt = ?, updatedBy = ?, discountTotal = ?
                 WHERE id = ?
             """).use { stmt ->
                 stmt.setString(1, quotation.quotationNumber)
@@ -136,7 +137,8 @@ class QuotationRepositorySQLiteImpl : QuotationRepository {
                 stmt.setString(12, quotation.status.name)
                 stmt.setLong(13, quotation.updatedAt)
                 stmt.setString(14, quotation.updatedBy)
-                stmt.setString(15, quotation.id)
+                stmt.setDouble(15, quotation.discountTotal)
+                stmt.setString(16, quotation.id)
                 stmt.executeUpdate()
             }
             Result.success(quotation)

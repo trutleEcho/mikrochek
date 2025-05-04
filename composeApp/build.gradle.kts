@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    kotlin("plugin.serialization") version "1.9.22"
 }
 
 kotlin {
@@ -72,7 +73,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.mikrochek"
-            packageVersion = "1.0.0"
+            packageVersion = "1.1.0"
             jvmArgs += listOf("-Xmx512m")
             modules("java.sql") // <-- ensure java.sql module is included if using modular JVM
         }

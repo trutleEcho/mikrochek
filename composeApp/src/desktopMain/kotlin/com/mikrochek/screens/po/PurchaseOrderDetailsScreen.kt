@@ -25,6 +25,12 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.mikrochek.components.Toast
+import com.mikrochek.components.ToastData
+import com.mikrochek.components.ToastType
+import com.mikrochek.screens.base.LoadingScreen
+import com.mikrochek.screens.base.ErrorScreen
+import com.mikrochek.utils.TimeUtils
 
 @Composable
 fun PurchaseOrderDetailsScreen(
@@ -35,63 +41,88 @@ fun PurchaseOrderDetailsScreen(
     var purchaseOrder by remember { mutableStateOf<PurchaseOrder?>(null) }
     var currentDestination by remember { mutableStateOf(NavDestination.PurchaseOrderDetails(poId)) }
     var isLoading by remember { mutableStateOf(true) }
+    var showError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
-
+    var toast by remember { mutableStateOf<ToastData?>(null) }
+    var deletePO by remember { mutableStateOf(false) }
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance() }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("MMM dd, yyyy") }
 
-    LaunchedEffect(poId) {
-        purchaseOrder = purchaseOrderRepository.getPurchaseOrderById(poId)
-        isLoading = false
+    LaunchedEffect(poId, deletePO) {
+        if (deletePO) {
+            purchaseOrderRepository.deletePurchaseOrder(poId)
+            deletePO = false
+        }
+        try {
+            purchaseOrder = purchaseOrderRepository.getPurchaseOrderById(poId)
+            if (purchaseOrder == null) {
+                errorMessage = "Purchase order not found"
+                showError = true
+                toast = ToastData("Purchase order not found", ToastType.ERROR)
+            }
+        } catch (e: Exception) {
+            errorMessage = "Failed to load purchase order: ${e.message}"
+            showError = true
+            toast = ToastData("Failed to load purchase order", ToastType.ERROR)
+        } finally {
+            isLoading = false
+        }
     }
 
     Row(modifier = Modifier.fillMaxSize()) {
-        // Content goes directly here without SideBar
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colors.background
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                PageHeader(
-                    title = "Purchase Order Details",
-                    subtitle = purchaseOrder?.poNumber ?: "",
-                    actions = {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ActionButton(
-                                text = "Print",
-                                icon = Icons.Default.Print,
-                                onClick = { /* TODO: Implement printing */ }
-                            )
-                            ActionButton(
-                                text = "Edit",
-                                icon = Icons.Default.Edit,
-                                onClick = { onNavigate(NavDestination.PurchaseOrderEdit(poId)) }
-                            )
-                            ActionButton(
-                                text = "Delete",
-                                icon = Icons.Default.Delete,
-                                onClick = { showDeleteConfirmation = true }
-                            )
-                        }
-                    }
-                )
-
-                if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                } else if (purchaseOrder == null) {
+            if (isLoading) {
+                LoadingScreen()
+            } else if (showError) {
+                ErrorScreen(message = errorMessage)
+            } else if (purchaseOrder == null) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
                         text = "Purchase order not found",
-                        style = MaterialTheme.typography.h6,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                        style = MaterialTheme.typography.body1,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
                     )
-                } else {
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    PageHeader(
+                        title = "Purchase Order Details",
+                        subtitle = purchaseOrder!!.poNumber,
+                        actions = {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ActionButton(
+                                    text = "Print",
+                                    icon = Icons.Default.Print,
+                                    onClick = { /* TODO: Implement printing */ }
+                                )
+                                ActionButton(
+                                    text = "Edit",
+                                    icon = Icons.Default.Edit,
+                                    onClick = { onNavigate(NavDestination.PurchaseOrderEdit(poId)) }
+                                )
+                                ActionButton(
+                                    text = "Delete",
+                                    icon = Icons.Default.Delete,
+                                    onClick = { showDeleteConfirmation = true }
+                                )
+                            }
+                        }
+                    )
+
                     Row(
                         modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = Arrangement.spacedBy(24.dp)
@@ -111,7 +142,9 @@ fun PurchaseOrderDetailsScreen(
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     DetailRow("PO Number", purchaseOrder!!.poNumber)
-                                    DetailRow("Vendor", purchaseOrder!!.vendorName)
+                                    DetailRow("Vendor Name", purchaseOrder!!.vendorName)
+                                    DetailRow("Vendor Address", purchaseOrder!!.vendorAddress)
+                                    DetailRow("Vendor Contact", purchaseOrder!!.vendorContact)
                                     DetailRow(
                                         "Created Date",
                                         LocalDateTime.ofInstant(
@@ -119,26 +152,26 @@ fun PurchaseOrderDetailsScreen(
                                             ZoneId.systemDefault()
                                         ).format(dateFormatter)
                                     )
-                                    DetailRow("Delivery Date", purchaseOrder!!.deliveryDate.toString())
+                                    DetailRow(
+                                        "Delivery Date",
+                                        TimeUtils.formatTime(purchaseOrder!!.deliveryDate ?: 0L)
+                                    )
                                     DetailRow("Status", purchaseOrder!!.status)
                                 }
                             }
 
-                            // Notes Section
+                            // Terms and Notes Section
                             Section(
-                                title = "Notes",
+                                title = "Terms and Notes",
                                 collapsible = true,
                                 defaultExpanded = true
                             ) {
-                                Text(
-                                    text = purchaseOrder!!.notes.ifEmpty { "No notes available" },
-                                    style = MaterialTheme.typography.body1,
-                                    color = if (purchaseOrder!!.notes.isEmpty()) {
-                                        MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                                    } else {
-                                        MaterialTheme.colors.onSurface
-                                    }
-                                )
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    DetailRow("Terms and Conditions", purchaseOrder!!.terms)
+                                    DetailRow("Additional Notes", purchaseOrder!!.notes)
+                                }
                             }
 
                             // Audit Information Section
@@ -219,9 +252,14 @@ fun PurchaseOrderDetailsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        // TODO: Delete purchase order
-                        showDeleteConfirmation = false
-                        onNavigate(NavDestination.PurchaseOrdersList)
+                        try {
+                            deletePO = true
+                            showDeleteConfirmation = false
+                            toast = ToastData("Purchase order deleted successfully", ToastType.SUCCESS)
+                            onNavigate(NavDestination.PurchaseOrdersList)
+                        } catch (e: Exception) {
+                            toast = ToastData("Failed to delete purchase order: ${e.message}", ToastType.ERROR)
+                        }
                     },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colors.error
@@ -237,6 +275,12 @@ fun PurchaseOrderDetailsScreen(
             }
         )
     }
+
+    // Add toast notification
+    Toast(
+        toast = toast,
+        onDismiss = { toast = null }
+    )
 }
 
 @Composable
@@ -282,12 +326,21 @@ private fun PurchaseOrderItemDetailRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Product Code
-            Text(
-                text = item.id,
-                style = MaterialTheme.typography.body2,
+            // Product Info
+            Column(
                 modifier = Modifier.weight(1f)
-            )
+            ) {
+                Text(
+                    text = item.product.name,
+                    style = MaterialTheme.typography.subtitle2,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = item.product.description,
+                    style = MaterialTheme.typography.caption,
+                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                )
+            }
 
             // Quantity
             Text(

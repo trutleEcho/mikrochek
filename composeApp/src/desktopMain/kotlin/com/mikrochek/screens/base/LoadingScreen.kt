@@ -1,4 +1,4 @@
-package com.hermesys.screens.base
+package com.mikrochek.screens.base
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.CircularProgressIndicator

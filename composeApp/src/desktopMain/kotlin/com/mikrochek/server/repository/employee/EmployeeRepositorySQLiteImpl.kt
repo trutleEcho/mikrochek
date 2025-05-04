@@ -75,7 +75,6 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
                 val payrollId = UUID.randomUUID().toString()
                 val status = when {
                     monthOffset == 0 -> listOf(PaymentStatus.PENDING, PaymentStatus.PROCESSING).random()
-                    monthOffset == 1 -> listOf(PaymentStatus.PAID, PaymentStatus.FAILED).random()
                     else -> PaymentStatus.PAID
                 }
                 
@@ -94,7 +93,7 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
                         else 
                             null,
                         paymentStatus = status,
-                        remarks = if (status == PaymentStatus.FAILED) "Transaction failed" else null,
+                        remarks =  null,
                         createdAt = TimeUtils.getCurrentISTTimestamp() - Random.nextLong(1, 30) * 86400000,
                         updatedAt = TimeUtils.getCurrentISTTimestamp(),
                         createdBy = "admin",
@@ -208,7 +207,7 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
     }
 
     override fun getFailedPayrolls(): List<EmployeePayroll> {
-        return payrolls.filter { it.paymentStatus == PaymentStatus.FAILED }
+        return payrolls
     }
 
     // Enhanced Payroll Operations
@@ -258,7 +257,7 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
                     )
                 } else {
                     newPayroll.copy(
-                        paymentStatus = PaymentStatus.FAILED,
+                        paymentStatus = PaymentStatus.PROCESSING,
                         updatedAt = TimeUtils.getCurrentISTTimestamp(),
                         remarks = "Transaction failed: Insufficient funds"
                     )
@@ -273,11 +272,6 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
             // Update existing payroll
             else {
                 val existingPayroll = payrolls[payrollIndex]
-                
-                // Only retry if failed, otherwise return existing
-                if (existingPayroll.paymentStatus != PaymentStatus.FAILED) {
-                    return Result.success(existingPayroll)
-                }
                 
                 // Update to processing status
                 val updatedPayroll = existingPayroll.copy(
@@ -302,7 +296,7 @@ class EmployeeRepositorySQLiteImpl : EmployeeRepository {
                     )
                 } else {
                     updatedPayroll.copy(
-                        paymentStatus = PaymentStatus.FAILED,
+                        paymentStatus = PaymentStatus.PROCESSING,
                         updatedAt = TimeUtils.getCurrentISTTimestamp(),
                         remarks = "Transaction failed again: Insufficient funds"
                     )

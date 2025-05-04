@@ -25,10 +25,18 @@ import com.mikrochek.server.repository.po.PurchaseOrderRepository
 import com.mikrochek.server.repository.product.ProductRepository
 import com.mikrochek.theme.AppColors
 import com.mikrochek.utils.TimeUtils
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import com.mikrochek.components.Toast
+import com.mikrochek.components.ToastData
+import com.mikrochek.components.ToastType
+import com.mikrochek.screens.base.LoadingScreen
+import kotlin.plus
+import kotlin.text.format
+import kotlin.toString
 
 data class FormError(
     val field: String,
@@ -43,12 +51,13 @@ fun PurchaseOrderEditorScreen(
     poId: String? = null
 ) {
     var purchaseOrder by remember { mutableStateOf<PurchaseOrder?>(null) }
-    var currentDestination by remember { mutableStateOf(NavDestination.PurchaseOrderCreate) }
     var isLoading by remember { mutableStateOf(true) }
     var showSaveConfirmation by remember { mutableStateOf(false) }
     var hasUnsavedChanges by remember { mutableStateOf(false) }
     var formErrors by remember { mutableStateOf<List<FormError>>(emptyList()) }
     var products by remember { mutableStateOf<List<Product>>(emptyList()) }
+    var toast by remember { mutableStateOf<ToastData?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     // Form state
     var poNumber by remember { mutableStateOf("") }
@@ -76,23 +85,28 @@ fun PurchaseOrderEditorScreen(
     val total = subtotal + tax
 
     LaunchedEffect(poId) {
-        if (poId != null) {
-            val existingPO = purchaseOrderRepository.getPurchaseOrderById(poId)
-            if (existingPO != null) {
-                purchaseOrder = existingPO
-                poNumber = existingPO.poNumber
-                vendorName = existingPO.vendorName
-                vendorAddress = existingPO.vendorAddress
-                vendorContact = existingPO.vendorContact
-                deliveryDate = LocalDate.ofEpochDay(existingPO.deliveryDate ?: 0)
-                status = existingPO.status
-                items = existingPO.items
-                terms = existingPO.terms
-                notes = existingPO.notes
+        try {
+            if (poId != null) {
+                val existingPO = purchaseOrderRepository.getPurchaseOrderById(poId)
+                if (existingPO != null) {
+                    purchaseOrder = existingPO
+                    poNumber = existingPO.poNumber
+                    vendorName = existingPO.vendorName
+                    vendorAddress = existingPO.vendorAddress
+                    vendorContact = existingPO.vendorContact
+                    deliveryDate = LocalDate.ofEpochDay(existingPO.deliveryDate ?: 0)
+                    status = existingPO.status
+                    items = existingPO.items
+                    terms = existingPO.terms
+                    notes = existingPO.notes
+                }
             }
+            products = productRepository.getAllProducts(isActive = true)
+        } catch (e: Exception) {
+            toast = ToastData("Failed to load purchase order: ${e.message}", ToastType.ERROR)
+        } finally {
+            isLoading = false
         }
-        products = productRepository.getAllProducts(isActive = true)
-        isLoading = false
     }
 
     fun validateForm(): List<FormError> {
@@ -113,32 +127,38 @@ fun PurchaseOrderEditorScreen(
         return errors
     }
 
-    fun handleSave() {
+    suspend fun handleSave() {
         val errors = validateForm()
         if (errors.isNotEmpty()) {
             formErrors = errors
             return
         }
 
-        val newPO = PurchaseOrder(
-            id = purchaseOrder?.id ?: UUID.randomUUID().toString(),
-            poNumber = poNumber,
-            vendorName = vendorName,
-            vendorAddress = vendorAddress,
-            vendorContact = vendorContact,
-            issueDate = TimeUtils.getCurrentISTTimestamp(),
-            deliveryDate = deliveryDate.toEpochDay(),
-            items = items,
-            terms = terms,
-            notes = notes,
-            status = status
-        )
+        try {
+            val newPO = PurchaseOrder(
+                id = purchaseOrder?.id ?: UUID.randomUUID().toString(),
+                poNumber = poNumber,
+                vendorName = vendorName,
+                vendorAddress = vendorAddress,
+                vendorContact = vendorContact,
+                issueDate = TimeUtils.getCurrentISTTimestamp(),
+                deliveryDate = deliveryDate.toEpochDay(),
+                items = items,
+                terms = terms,
+                notes = notes,
+                status = status
+            )
 
-        // Save logic here
-        hasUnsavedChanges = false
-        showSaveConfirmation = false
-        onNavigate(NavDestination.PurchaseOrdersList)
+            purchaseOrderRepository.createPurchaseOrder(newPO)
+            hasUnsavedChanges = false
+            showSaveConfirmation = false
+            toast = ToastData("Purchase order saved successfully", ToastType.SUCCESS)
+            onNavigate(NavDestination.PurchaseOrdersList)
+        } catch (e: Exception) {
+            toast = ToastData("Failed to save purchase order: ${e.message}", ToastType.ERROR)
+        }
     }
+
 
     if (showSaveConfirmation) {
         AlertDialog(
@@ -146,7 +166,11 @@ fun PurchaseOrderEditorScreen(
             title = { Text("Save Purchase Order") },
             text = { Text("Are you sure you want to save this purchase order?") },
             confirmButton = {
-                TextButton(onClick = { handleSave() }) {
+                TextButton(onClick = {
+                    coroutineScope.launch {
+                        handleSave()
+                    }
+                }) {
                     Text("Save")
                 }
             },
@@ -156,337 +180,6 @@ fun PurchaseOrderEditorScreen(
                 }
             }
         )
-    }
-
-    Row(modifier = Modifier.fillMaxSize()) {
-        // Content goes directly here without SideBar
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colors.background
-        ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            PageHeader(
-                title = if (poId == null) "Create Purchase Order" else "Edit Purchase Order",
-                subtitle = if (poId == null) "Create a new purchase order" else "Modify existing purchase order #$poNumber",
-                actions = {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.width(120.dp)
-                    ) {
-                        if (hasUnsavedChanges) {
-                            Text(
-                                "Unsaved changes",
-                                style = MaterialTheme.typography.caption,
-                                color = AppColors.Warning,
-                                modifier = Modifier.align(Alignment.CenterVertically)
-                            )
-                        }
-                        ActionButton(
-                            text = "Cancel",
-                            icon = Icons.Default.Close,
-                            onClick = {
-                                if (hasUnsavedChanges) {
-                                    // Show confirmation dialog
-                                } else {
-                                    onNavigate(NavDestination.PurchaseOrdersList)
-                                }
-                            }
-                        )
-                        ActionButton(
-                            text = "Save",
-                            icon = Icons.Default.Save,
-                            onClick = { showSaveConfirmation = true }
-                        )
-                    }
-                }
-            )
-
-            if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp)
-                ) {
-                    // Left Column - PO Details
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(24.dp)
-                    ) {
-                        // Basic Information Section
-                        Section(
-                            title = "Basic Information",
-                            collapsible = true,
-                            defaultExpanded = true
-                        ) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = poNumber,
-                                    onValueChange = {
-                                        poNumber = it
-                                        hasUnsavedChanges = true
-                                    },
-                                    label = { Text("PO Number") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    enabled = poId == null,
-                                    isError = formErrors.any { it.field == "poNumber" }
-                                )
-                                if (formErrors.any { it.field == "poNumber" }) {
-                                    Text(
-                                        text = formErrors.first { it.field == "poNumber" }.message,
-                                        color = MaterialTheme.colors.error,
-                                        style = MaterialTheme.typography.caption
-                                    )
-                                }
-
-                                OutlinedTextField(
-                                    value = vendorName,
-                                    onValueChange = {
-                                        vendorName = it
-                                        hasUnsavedChanges = true
-                                    },
-                                    label = { Text("Vendor Name") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    isError = formErrors.any { it.field == "vendorName" }
-                                )
-                                if (formErrors.any { it.field == "vendorName" }) {
-                                    Text(
-                                        text = formErrors.first { it.field == "vendorName" }.message,
-                                        color = MaterialTheme.colors.error,
-                                        style = MaterialTheme.typography.caption
-                                    )
-                                }
-
-                                OutlinedTextField(
-                                    value = vendorAddress,
-                                    onValueChange = {
-                                        vendorAddress = it
-                                        hasUnsavedChanges = true
-                                    },
-                                    label = { Text("Vendor Address") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                OutlinedTextField(
-                                    value = vendorContact,
-                                    onValueChange = {
-                                        vendorContact = it
-                                        hasUnsavedChanges = true
-                                    },
-                                    label = { Text("Vendor Contact") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                OutlinedTextField(
-                                    value = deliveryDate.format(dateFormatter),
-                                    onValueChange = {
-                                        try {
-                                            deliveryDate = LocalDate.parse(it, dateFormatter)
-                                            hasUnsavedChanges = true
-                                        } catch (e: Exception) {
-                                            // Invalid date format
-                                        }
-                                    },
-                                    label = { Text("Delivery Date") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                // Status Dropdown
-                                Box {
-                                    var expanded by remember { mutableStateOf(false) }
-                                    OutlinedTextField(
-                                        value = status,
-                                        onValueChange = {},
-                                        label = { Text("Status") },
-                                        readOnly = true,
-                                        trailingIcon = {
-                                            IconButton(onClick = { expanded = true }) {
-                                                Icon(Icons.Default.ArrowDropDown, "Select status")
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    DropdownMenu(
-                                        expanded = expanded,
-                                        onDismissRequest = { expanded = false },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(MaterialTheme.colors.surface)
-                                    ) {
-                                        listOf(
-                                            "DRAFT",
-                                            "PENDING",
-                                            "APPROVED",
-                                            "COMPLETED",
-                                            "CANCELLED"
-                                        ).forEach { statusOption ->
-                                            DropdownMenuItem(
-                                                onClick = {
-                                                    status = statusOption
-                                                    hasUnsavedChanges = true
-                                                    expanded = false
-                                                }
-                                            ) {
-                                                Text(statusOption)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-//                            // Terms and Notes Section
-//                            Section(
-//                                title = "Terms and Notes",
-//                                collapsible = true,
-//                                defaultExpanded = true
-//                            ) {
-//                                Column(
-//                                    verticalArrangement = Arrangement.spacedBy(16.dp)
-//                                ) {
-//                                    OutlinedTextField(
-//                                        value = terms,
-//                                        onValueChange = {
-//                                            terms = it
-//                                            hasUnsavedChanges = true
-//                                        },
-//                                        label = { Text("Terms and Conditions") },
-//                                        modifier = Modifier.fillMaxWidth(),
-//                                        minLines = 3,
-//                                        maxLines = 5
-//                                    )
-//
-//                                    OutlinedTextField(
-//                                        value = notes,
-//                                        onValueChange = {
-//                                            notes = it
-//                                            hasUnsavedChanges = true
-//                                        },
-//                                        label = { Text("Additional Notes") },
-//                                        modifier = Modifier.fillMaxWidth(),
-//                                        minLines = 3,
-//                                        maxLines = 5
-//                                    )
-//                                }
-//                            }
-                    }
-
-                    // Right Column - Items and Summary
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(24.dp)
-                    ) {
-                        Section(
-                            title = "Items",
-                            collapsible = true,
-                            defaultExpanded = true,
-                            actions = {
-                                Box(
-                                    modifier = Modifier.width(160.dp)
-                                ){
-                                    ActionButton(
-                                        text = "Add Item",
-                                        icon = Icons.Default.Add,
-                                        onClick = { showProductSelector = true },
-                                    )
-                                }
-                            }
-                        ) {
-                            if (formErrors.any { it.field == "items" }) {
-                                Text(
-                                    text = formErrors.first { it.field == "items" }.message,
-                                    color = MaterialTheme.colors.error,
-                                    style = MaterialTheme.typography.caption,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
-                            }
-
-                            LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(items) { item ->
-                                    PurchaseOrderItemRow(
-                                        item = item,
-                                        onDelete = {
-                                            items = items.filter { it != item }
-                                            hasUnsavedChanges = true
-                                        },
-                                        onQuantityChange = { newQuantity: Int ->
-                                            items = items.map {
-                                                if (it == item) it.copy(quantity = newQuantity)
-                                                else it
-                                            }
-                                            hasUnsavedChanges = true
-                                        }
-                                    )
-                                }
-                            }
-
-                            if (items.isEmpty()) {
-                                Text(
-                                    text = "No items added yet",
-                                    style = MaterialTheme.typography.body2,
-                                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
-                                    modifier = Modifier.padding(vertical = 16.dp)
-                                )
-                            }
-
-                            Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-                            // Order Summary
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Subtotal")
-                                    Text(currencyFormatter.format(subtotal))
-                                }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Tax (10%)")
-                                    Text(currencyFormatter.format(tax))
-                                }
-                                Divider()
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        "Total",
-                                        style = MaterialTheme.typography.subtitle1,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        currencyFormatter.format(total),
-                                        style = MaterialTheme.typography.subtitle1,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     if (showProductSelector) {
@@ -515,7 +208,8 @@ fun PurchaseOrderEditorScreen(
                                     Icon(Icons.Default.ArrowDropDown, "Select product")
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            isError = selectedProduct == null
                         )
                         DropdownMenu(
                             expanded = expanded,
@@ -556,7 +250,8 @@ fun PurchaseOrderEditorScreen(
                         label = { Text("Quantity") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = quantity.isEmpty() || (quantity.toIntOrNull() ?: 0) <= 0
                     )
 
                     OutlinedTextField(
@@ -569,7 +264,8 @@ fun PurchaseOrderEditorScreen(
                         label = { Text("Unit Price") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = unitPrice.isEmpty() || (unitPrice.toDoubleOrNull() ?: 0.0) <= 0.0
                     )
 
                     // Show total
@@ -629,7 +325,342 @@ fun PurchaseOrderEditorScreen(
             }
         )
     }
-}
+
+    // Add toast notification
+    Toast(
+        toast = toast,
+        onDismiss = { toast = null }
+    )
+
+    Row(modifier = Modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colors.background
+        ) {
+            if (isLoading) {
+                LoadingScreen()
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    PageHeader(
+                        title = if (poId == null) "Create Purchase Order" else "Edit Purchase Order",
+                        subtitle = if (poId == null) "Create a new purchase order" else "Modify existing purchase order #$poNumber",
+                        actions = {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                if (hasUnsavedChanges) {
+                                    Text(
+                                        "Unsaved changes",
+                                        style = MaterialTheme.typography.caption,
+                                        color = AppColors.Warning,
+                                        modifier = Modifier.align(Alignment.CenterVertically)
+                                    )
+                                }
+                                Box(modifier = Modifier.width(120.dp)){
+                                    ActionButton(
+                                        text = "Cancel",
+                                        icon = Icons.Default.Close,
+                                        onClick = {
+                                            if (hasUnsavedChanges) {
+                                                // Show confirmation dialog
+                                            } else {
+                                                onNavigate(NavDestination.PurchaseOrdersList)
+                                            }
+                                        }
+                                    )
+                                }
+                                Box(modifier = Modifier.width(120.dp)){
+                                    ActionButton(
+                                        text = "Save",
+                                        icon = Icons.Default.Save,
+                                        onClick = { showSaveConfirmation = true
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(24.dp)
+                    ) {
+                        // Left Column - PO Details
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(24.dp)
+                        ) {
+                            // Basic Information Section
+                            Section(
+                                title = "Basic Information",
+                                collapsible = true,
+                                defaultExpanded = true
+                            ) {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = poNumber,
+                                        onValueChange = {
+                                            poNumber = it
+                                            hasUnsavedChanges = true
+                                        },
+                                        label = { Text("PO Number") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        enabled = poId == null,
+                                        isError = formErrors.any { it.field == "poNumber" }
+                                    )
+                                    if (formErrors.any { it.field == "poNumber" }) {
+                                        Text(
+                                            text = formErrors.first { it.field == "poNumber" }.message,
+                                            color = MaterialTheme.colors.error,
+                                            style = MaterialTheme.typography.caption
+                                        )
+                                    }
+
+                                    OutlinedTextField(
+                                        value = vendorName,
+                                        onValueChange = {
+                                            vendorName = it
+                                            hasUnsavedChanges = true
+                                        },
+                                        label = { Text("Vendor Name") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        isError = formErrors.any { it.field == "vendorName" }
+                                    )
+                                    if (formErrors.any { it.field == "vendorName" }) {
+                                        Text(
+                                            text = formErrors.first { it.field == "vendorName" }.message,
+                                            color = MaterialTheme.colors.error,
+                                            style = MaterialTheme.typography.caption
+                                        )
+                                    }
+
+                                    OutlinedTextField(
+                                        value = vendorAddress,
+                                        onValueChange = {
+                                            vendorAddress = it
+                                            hasUnsavedChanges = true
+                                        },
+                                        label = { Text("Vendor Address") },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = vendorContact,
+                                        onValueChange = {
+                                            vendorContact = it
+                                            hasUnsavedChanges = true
+                                        },
+                                        label = { Text("Vendor Contact") },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = deliveryDate.format(dateFormatter),
+                                        onValueChange = {
+                                            try {
+                                                deliveryDate = LocalDate.parse(it, dateFormatter)
+                                                hasUnsavedChanges = true
+                                            } catch (e: Exception) {
+                                                // Invalid date format
+                                            }
+                                        },
+                                        label = { Text("Delivery Date") },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    // Status Dropdown
+                                    Box {
+                                        var expanded by remember { mutableStateOf(false) }
+                                        OutlinedTextField(
+                                            value = status,
+                                            onValueChange = {},
+                                            label = { Text("Status") },
+                                            readOnly = true,
+                                            trailingIcon = {
+                                                IconButton(onClick = { expanded = true }) {
+                                                    Icon(Icons.Default.ArrowDropDown, "Select status")
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        DropdownMenu(
+                                            expanded = expanded,
+                                            onDismissRequest = { expanded = false },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(MaterialTheme.colors.surface)
+                                        ) {
+                                            listOf(
+                                                "DRAFT",
+                                                "PENDING",
+                                                "APPROVED",
+                                                "COMPLETED",
+                                                "CANCELLED"
+                                            ).forEach { statusOption ->
+                                                DropdownMenuItem(
+                                                    onClick = {
+                                                        status = statusOption
+                                                        hasUnsavedChanges = true
+                                                        expanded = false
+                                                    }
+                                                ) {
+                                                    Text(statusOption)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Terms and Notes Section
+                            Section(
+                                title = "Terms and Notes",
+                                collapsible = true,
+                                defaultExpanded = true
+                            ) {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = terms,
+                                        onValueChange = {
+                                            terms = it
+                                            hasUnsavedChanges = true
+                                        },
+                                        label = { Text("Terms and Conditions") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        minLines = 3,
+                                        maxLines = 5
+                                    )
+
+                                    OutlinedTextField(
+                                        value = notes,
+                                        onValueChange = {
+                                            notes = it
+                                            hasUnsavedChanges = true
+                                        },
+                                        label = { Text("Additional Notes") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        minLines = 3,
+                                        maxLines = 5
+                                    )
+                                }
+                            }
+                        }
+
+                        // Right Column - Items and Summary
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(24.dp)
+                        ) {
+                            Section(
+                                title = "Items",
+                                collapsible = true,
+                                defaultExpanded = true,
+                                actions = {
+                                    Box(
+                                        modifier = Modifier.width(160.dp)
+                                    ){
+                                        ActionButton(
+                                            text = "Add Item",
+                                            icon = Icons.Default.Add,
+                                            onClick = { showProductSelector = true },
+                                        )
+                                    }
+                                }
+                            ) {
+                                if (formErrors.any { it.field == "items" }) {
+                                    Text(
+                                        text = formErrors.first { it.field == "items" }.message,
+                                        color = MaterialTheme.colors.error,
+                                        style = MaterialTheme.typography.caption,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                }
+
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(items) { item ->
+                                        PurchaseOrderItemRow(
+                                            item = item,
+                                            onDelete = {
+                                                items = items.filter { it != item }
+                                                hasUnsavedChanges = true
+                                            },
+                                            onQuantityChange = { newQuantity: Int ->
+                                                items = items.map {
+                                                    if (it == item) it.copy(quantity = newQuantity)
+                                                    else it
+                                                }
+                                                hasUnsavedChanges = true
+                                            }
+                                        )
+                                    }
+                                }
+
+                                if (items.isEmpty()) {
+                                    Text(
+                                        text = "No items added yet",
+                                        style = MaterialTheme.typography.body2,
+                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                                        modifier = Modifier.padding(vertical = 16.dp)
+                                    )
+                                }
+
+                                Divider(modifier = Modifier.padding(vertical = 16.dp))
+
+                                // Order Summary
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Subtotal")
+                                        Text(currencyFormatter.format(subtotal))
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Tax (10%)")
+                                        Text(currencyFormatter.format(tax))
+                                    }
+                                    Divider()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            "Total",
+                                            style = MaterialTheme.typography.subtitle1,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            currencyFormatter.format(total),
+                                            style = MaterialTheme.typography.subtitle1,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
 @Composable
 fun PurchaseOrderItemRow(

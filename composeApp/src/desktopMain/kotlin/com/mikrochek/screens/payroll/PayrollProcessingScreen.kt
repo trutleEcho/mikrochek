@@ -36,6 +36,7 @@ import kotlin.getValue
 @Composable
 fun PayrollProcessingScreen(
     onNavigate: (NavDestination) -> Unit,
+    onEmployeeDetails: (NavDestination) -> Unit,
     showToast: (String, ToastType) -> Unit,
 ) {
     val currentDate = remember { LocalDate.now() }
@@ -50,37 +51,36 @@ fun PayrollProcessingScreen(
     var employees by remember { mutableStateOf(emptyList<Employee>()) }
     var payrolls by remember { mutableStateOf(emptyList<EmployeePayroll>()) }
     var processingEmployeeId by remember { mutableStateOf<String?>(null) }
-    
+
     val scope = rememberCoroutineScope()
-    
+
     // Filter options
     var showProcessed by remember { mutableStateOf(true) }
     var showPending by remember { mutableStateOf(true) }
     var showFailed by remember { mutableStateOf(true) }
-    
+
     // Load data
     LaunchedEffect(selectedMonth, selectedYear, showProcessed, showPending, showFailed) {
         isLoading = true
-        
+
         // Get all active employees
         employees = employeeRepository.getAllEmployees(true)
-        
+
         // Get payrolls for the selected month
         val allPayrolls = employeeRepository.getPayrollsByMonth(selectedMonth, selectedYear)
-        
+
         // Apply filters
         payrolls = allPayrolls.filter { payroll ->
             when (payroll.paymentStatus) {
                 PaymentStatus.PAID -> showProcessed
                 PaymentStatus.PENDING -> showPending
-                PaymentStatus.FAILED -> showFailed
                 else -> true
             }
         }
-        
+
         isLoading = false
     }
-    
+
     // Filter payrolls by search query
     val filteredPayrolls = remember(payrolls, searchQuery) {
         if (searchQuery.isBlank()) {
@@ -89,28 +89,27 @@ fun PayrollProcessingScreen(
             payrolls.filter { payroll ->
                 val employee = employees.find { it.id == payroll.employeeId }
                 "${employee?.firstName} ${employee?.lastName}".contains(searchQuery, ignoreCase = true) ||
-                employee?.employeeId?.contains(searchQuery, ignoreCase = true) == true ||
-                employee?.department?.contains(searchQuery, ignoreCase = true) == true
+                        employee?.employeeId?.contains(searchQuery, ignoreCase = true) == true ||
+                        employee?.department?.contains(searchQuery, ignoreCase = true) == true
             }
         }
     }
-    
+
     // Process payroll for a specific employee
     fun processEmployeePayroll(employeeId: String) {
         scope.launch {
             processingEmployeeId = employeeId
             val result = employeeRepository.processPayroll(employeeId, selectedMonth, selectedYear)
-            
+
             if (result.isSuccess) {
                 showToast("Payroll processed successfully", ToastType.SUCCESS)
-                
+
                 // Refresh payrolls
                 val allPayrolls = employeeRepository.getPayrollsByMonth(selectedMonth, selectedYear)
                 payrolls = allPayrolls.filter { payroll ->
                     when (payroll.paymentStatus) {
                         PaymentStatus.PAID -> showProcessed
                         PaymentStatus.PENDING -> showPending
-                        PaymentStatus.FAILED -> showFailed
                         else -> true
                     }
                 }
@@ -120,11 +119,11 @@ fun PayrollProcessingScreen(
                     ToastType.ERROR
                 )
             }
-            
+
             processingEmployeeId = null
         }
     }
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -136,7 +135,7 @@ fun PayrollProcessingScreen(
             subtitle = "Generate and process employee payrolls",
             icon = Icons.Default.Payment
         )
-        
+
         // Action Bar
         Row(
             modifier = Modifier
@@ -148,7 +147,7 @@ fun PayrollProcessingScreen(
             // Month/Year selection
             Box {
                 var monthExpanded by remember { mutableStateOf(false) }
-                
+
                 OutlinedButton(onClick = { monthExpanded = true }) {
                     Text(Month.of(selectedMonth).getDisplayName(TextStyle.FULL, Locale.getDefault()))
                     Icon(
@@ -156,7 +155,7 @@ fun PayrollProcessingScreen(
                         contentDescription = "Select month"
                     )
                 }
-                
+
                 DropdownMenu(
                     expanded = monthExpanded,
                     onDismissRequest = { monthExpanded = false }
@@ -171,10 +170,10 @@ fun PayrollProcessingScreen(
                     }
                 }
             }
-            
+
             Box {
                 var yearExpanded by remember { mutableStateOf(false) }
-                
+
                 OutlinedButton(onClick = { yearExpanded = true }) {
                     Text(selectedYear.toString())
                     Icon(
@@ -182,12 +181,12 @@ fun PayrollProcessingScreen(
                         contentDescription = "Select year"
                     )
                 }
-                
+
                 DropdownMenu(
                     expanded = yearExpanded,
                     onDismissRequest = { yearExpanded = false }
                 ) {
-                    for (year in currentYear-2..currentYear+1) {
+                    for (year in currentYear - 2..currentYear + 1) {
                         DropdownMenuItem(onClick = {
                             selectedYear = year
                             yearExpanded = false
@@ -197,9 +196,7 @@ fun PayrollProcessingScreen(
                     }
                 }
             }
-            
-            Spacer(modifier = Modifier.width(16.dp))
-            
+
             // Search
             SimpleSearchBar(
                 query = searchQuery,
@@ -207,7 +204,7 @@ fun PayrollProcessingScreen(
                 placeholder = "Search employees...",
                 modifier = Modifier.weight(1f)
             )
-            
+
             // Filter buttons
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -218,23 +215,16 @@ fun PayrollProcessingScreen(
                     onSelected = { showProcessed = it },
                     color = AppColors.Success
                 )
-                
+
                 FilterChip(
                     text = "Pending",
                     selected = showPending,
                     onSelected = { showPending = it },
                     color = AppColors.Warning
                 )
-                
-                FilterChip(
-                    text = "Failed",
-                    selected = showFailed,
-                    onSelected = { showFailed = it },
-                    color = AppColors.Error
-                )
             }
         }
-        
+
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -255,7 +245,7 @@ fun PayrollProcessingScreen(
                         color = MaterialTheme.colors.onSurface.copy(alpha = 0.5f)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     if (employees.isNotEmpty()) {
                         Button(
                             onClick = {
@@ -322,21 +312,21 @@ fun PayrollProcessingScreen(
                     modifier = Modifier.weight(0.15f)
                 )
             }
-            
+
             // Table Content
             LazyColumn(
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(filteredPayrolls) { payroll ->
                     val employee = employees.find { it.id == payroll.employeeId }
-                    
+
                     if (employee != null) {
                         PayrollRow(
                             payroll = payroll,
                             employee = employee,
                             isProcessing = processingEmployeeId == employee.id,
                             onProcess = { processEmployeePayroll(employee.id) },
-                            onEmployeeDetails = { onNavigate(NavDestination.EmployeeDetails(employee.id)) },
+                            onEmployeeDetails = { onEmployeeDetails(NavDestination.EmployeeEdit(employee.id)) },
                             onPayrollDetails = { onNavigate(NavDestination.PayrollDetails(payroll.id)) }
                         )
                         Divider()
@@ -379,7 +369,7 @@ fun PayrollRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        
+
         // Department
         Text(
             text = employee.department,
@@ -388,7 +378,7 @@ fun PayrollRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(0.15f)
         )
-        
+
         // Salary
         Text(
             text = "₹${String.format("%,.2f", payroll.netSalary)}",
@@ -397,7 +387,7 @@ fun PayrollRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(0.15f)
         )
-        
+
         // Status
         Box(
             modifier = Modifier
@@ -407,10 +397,9 @@ fun PayrollRow(
             val (backgroundColor, text) = when (payroll.paymentStatus) {
                 PaymentStatus.PAID -> Pair(AppColors.Success, "Processed")
                 PaymentStatus.PENDING -> Pair(AppColors.Warning, "Pending")
-                PaymentStatus.FAILED -> Pair(AppColors.Error, "Failed")
                 else -> Pair(AppColors.Gray400, "Unknown")
             }
-            
+
             Box(
                 modifier = Modifier
                     .background(
@@ -426,7 +415,7 @@ fun PayrollRow(
                 )
             }
         }
-        
+
         // Processing Date
         Text(
             text = if (payroll.paymentDate != null) {
@@ -440,7 +429,7 @@ fun PayrollRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(0.15f)
         )
-        
+
         // Actions
         Row(
             modifier = Modifier.weight(0.15f),
@@ -453,15 +442,15 @@ fun PayrollRow(
                     tint = MaterialTheme.colors.primary
                 )
             }
-            
-            IconButton(onClick = onPayrollDetails) {
-                Icon(
-                    imageVector = Icons.Default.Receipt,
-                    contentDescription = "Payroll details",
-                    tint = MaterialTheme.colors.primary
-                )
-            }
-            
+
+//            IconButton(onClick = onPayrollDetails) {
+//                Icon(
+//                    imageVector = Icons.Default.Receipt,
+//                    contentDescription = "Payroll details",
+//                    tint = MaterialTheme.colors.primary
+//                )
+//            }
+
             if (payroll.paymentStatus != PaymentStatus.PAID) {
                 IconButton(
                     onClick = onProcess,

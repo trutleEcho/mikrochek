@@ -26,6 +26,11 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.mikrochek.components.Toast
+import com.mikrochek.components.ToastData
+import com.mikrochek.components.ToastType
+import com.mikrochek.screens.base.LoadingScreen
+import com.mikrochek.screens.base.ErrorScreen
 
 @Composable
 fun PurchaseOrderListScreen(
@@ -36,37 +41,46 @@ fun PurchaseOrderListScreen(
     var purchaseOrders by remember { mutableStateOf<List<PurchaseOrder>>(emptyList()) }
     var selectedFilter by remember { mutableStateOf("All") }
     var sortOrder by remember { mutableStateOf("Newest") }
+    var isLoading by remember { mutableStateOf(true) }
+    var showError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+    var toast by remember { mutableStateOf<ToastData?>(null) }
+
     val filters = listOf("All", "Draft", "Pending", "Approved", "Completed", "Cancelled")
     val sortOptions = listOf("Newest", "Oldest", "Highest Amount", "Lowest Amount")
     var currentDestination by remember { mutableStateOf(NavDestination.PurchaseOrdersList) }
-    var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(searchQuery, selectedFilter, sortOrder) {
-        isLoading = true
-        val allOrders = purchaseOrderRepository.getAllPurchaseOrders()
-        
-        // Apply filters
-        val filtered = allOrders.filter { po ->
-            (selectedFilter == "All" || po.status == selectedFilter) &&
-            (searchQuery.isEmpty() || 
-             po.poNumber.contains(searchQuery, ignoreCase = true) ||
-             po.vendorName.contains(searchQuery, ignoreCase = true))
-        }
+        try {
+            isLoading = true
+            val allOrders = purchaseOrderRepository.getAllPurchaseOrders()
+            
+            // Apply filters
+            val filtered = allOrders.filter { po ->
+                (selectedFilter == "All" || po.status == selectedFilter) &&
+                (searchQuery.isEmpty() || 
+                 po.poNumber.contains(searchQuery, ignoreCase = true) ||
+                 po.vendorName.contains(searchQuery, ignoreCase = true))
+            }
 
-        // Apply sorting
-        purchaseOrders = when (sortOrder) {
-            "Newest" -> filtered.sortedByDescending { it.issueDate }
-            "Oldest" -> filtered.sortedBy { it.issueDate }
-            "Highest Amount" -> filtered.sortedByDescending { it.total }
-            "Lowest Amount" -> filtered.sortedBy { it.total }
-            else -> filtered
+            // Apply sorting
+            purchaseOrders = when (sortOrder) {
+                "Newest" -> filtered.sortedByDescending { it.issueDate }
+                "Oldest" -> filtered.sortedBy { it.issueDate }
+                "Highest Amount" -> filtered.sortedByDescending { it.total }
+                "Lowest Amount" -> filtered.sortedBy { it.total }
+                else -> filtered
+            }
+        } catch (e: Exception) {
+            errorMessage = "Failed to load purchase orders: ${e.message}"
+            showError = true
+            toast = ToastData("Failed to load purchase orders", ToastType.ERROR)
+        } finally {
+            isLoading = false
         }
-        
-        isLoading = false
     }
 
     Row(modifier = Modifier.fillMaxSize()) {
-        // Content goes directly here without SideBar
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colors.background
@@ -74,186 +88,146 @@ fun PurchaseOrderListScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                PageHeader(
-                    title = "Purchase Orders",
-                    subtitle = "Manage and track your purchase orders",
-                    actions = {
-                        Box(
-                            modifier = Modifier.width(180.dp)
-                        ){
-                            ActionButton(
-                                text = "Create PO",
-                                icon = Icons.Default.Add,
-                                onClick = { onNavigate(NavDestination.PurchaseOrderCreate) }
-                            )
-                        }
-                    }
-                )
-
-                // Search and Filter Section
-                Section(
-                    title = "Search and Filter",
-                    collapsible = true,
-                    defaultExpanded = true
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    Text(
+                        text = "Purchase Orders",
+                        style = MaterialTheme.typography.h6,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${purchaseOrders.size} orders found",
+                        style = MaterialTheme.typography.body2,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+
+                if (isLoading) {
+                    LoadingScreen()
+                } else if (showError) {
+                    ErrorScreen(message = errorMessage)
+                } else if (purchaseOrders.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
+                        Text(
+                            text = "No purchase orders found",
+                            style = MaterialTheme.typography.body1,
+                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                } else {
+                    // Filters and Search
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Search
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("Search by PO number or vendor...") },
+                            label = { Text("Search") },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Search,
                                     contentDescription = "Search"
                                 )
-                            }
+                            },
+                            modifier = Modifier.weight(1f)
                         )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            // Filter dropdown
-                            Box(modifier = Modifier.weight(1f)) {
-                                var expanded by remember { mutableStateOf(false) }
-                                OutlinedButton(
-                                    onClick = { expanded = true },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.FilterList,
-                                        contentDescription = "Filter"
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Status: $selectedFilter")
-                                }
-
-                                DropdownMenu(
-                                    expanded = expanded,
-                                    onDismissRequest = { expanded = false }
-                                ) {
-                                    filters.forEach { filter ->
-                                        DropdownMenuItem(
-                                            onClick = {
-                                                selectedFilter = filter
-                                                expanded = false
-                                            }
-                                        ) {
-                                            Text(filter)
+                        // Filter Dropdown
+                        Box {
+                            var expanded by remember { mutableStateOf(false) }
+                            OutlinedButton(
+                                onClick = { expanded = true },
+                                modifier = Modifier.width(160.dp)
+                            ) {
+                                Text(selectedFilter)
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Filter"
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                filters.forEach { filter ->
+                                    DropdownMenuItem(
+                                        onClick = {
+                                            selectedFilter = filter
+                                            expanded = false
                                         }
+                                    ) {
+                                        Text(filter)
                                     }
                                 }
                             }
+                        }
 
-                            // Sort dropdown
-                            Box(modifier = Modifier.weight(1f)) {
-                                var expanded by remember { mutableStateOf(false) }
-                                OutlinedButton(
-                                    onClick = { expanded = true },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Sort,
-                                        contentDescription = "Sort"
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Sort: $sortOrder")
-                                }
-
-                                DropdownMenu(
-                                    expanded = expanded,
-                                    onDismissRequest = { expanded = false }
-                                ) {
-                                    sortOptions.forEach { option ->
-                                        DropdownMenuItem(
-                                            onClick = {
-                                                sortOrder = option
-                                                expanded = false
-                                            }
-                                        ) {
-                                            Text(option)
+                        // Sort Dropdown
+                        Box {
+                            var expanded by remember { mutableStateOf(false) }
+                            OutlinedButton(
+                                onClick = { expanded = true },
+                                modifier = Modifier.width(160.dp)
+                            ) {
+                                Text(sortOrder)
+                                Icon(
+                                    imageVector = Icons.Default.Sort,
+                                    contentDescription = "Sort"
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                sortOptions.forEach { option ->
+                                    DropdownMenuItem(
+                                        onClick = {
+                                            sortOrder = option
+                                            expanded = false
                                         }
+                                    ) {
+                                        Text(option)
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                // Purchase Orders List
-                Card(
-                    modifier = Modifier.weight(1f),
-                    elevation = 1.dp
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    // Purchase Orders List
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Header
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Purchase Orders",
-                                style = MaterialTheme.typography.h6,
-                                fontWeight = FontWeight.Bold
+                        items(purchaseOrders) { po ->
+                            PurchaseOrderListItem(
+                                purchaseOrder = po,
+                                onClick = { onNavigate(NavDestination.PurchaseOrderDetails(po.id)) }
                             )
-                            Text(
-                                text = "${purchaseOrders.size} orders found",
-                                style = MaterialTheme.typography.body2,
-                                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-
-                        if (isLoading) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator()
-                            }
-                        } else if (purchaseOrders.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (searchQuery.isEmpty() && selectedFilter == "All")
-                                        "No purchase orders found. Create your first one!"
-                                    else
-                                        "No purchase orders match your search criteria.",
-                                    style = MaterialTheme.typography.body1,
-                                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                                )
-                            }
-                        } else {
-                            LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(purchaseOrders) { po ->
-                                    PurchaseOrderListItem(
-                                        purchaseOrder = po,
-                                        onClick = { onNavigate(NavDestination.PurchaseOrderDetails(po.id)) }
-                                    )
-                                }
-                            }
                         }
                     }
                 }
             }
         }
     }
+
+    // Add toast notification
+    Toast(
+        toast = toast,
+        onDismiss = { toast = null }
+    )
 }
 
 @OptIn(ExperimentalMaterialApi::class)
