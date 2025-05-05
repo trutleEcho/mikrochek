@@ -71,7 +71,7 @@ compose.desktop {
         mainClass = "com.mikrochek.MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Exe)
             packageName = "com.mikrochek"
             packageVersion = "1.1.1"
             jvmArgs += listOf("-Xmx512m")
