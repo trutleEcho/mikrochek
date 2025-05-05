@@ -14,14 +14,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mikrochek.components.common.SimpleSearchBar
+import com.mikrochek.components.Toast
+import com.mikrochek.components.ToastData
 import com.mikrochek.components.ToastType
 import com.mikrochek.components.layout.PageHeader
 import com.mikrochek.navigation.NavDestination
+import com.mikrochek.screens.base.LoadingScreen
 import com.mikrochek.server.database.models.Employee
 import com.mikrochek.server.database.models.EmployeePayroll
 import com.mikrochek.server.database.models.PaymentStatus
 import com.mikrochek.server.repository.employee.EmployeeRepository
+import com.mikrochek.server.repository.employee.EmployeeRepositorySQLiteImpl
 import com.mikrochek.theme.AppColors
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
 import java.time.Instant
@@ -43,6 +48,7 @@ fun PayrollProcessingScreen(
     val currentMonth = remember { currentDate.monthValue }
     val currentYear = remember { currentDate.year }
     val employeeRepository: EmployeeRepository by GlobalContext.get().inject()
+    val sqlRepository = employeeRepository as? EmployeeRepositorySQLiteImpl
 
     var selectedMonth by remember { mutableStateOf(currentMonth) }
     var selectedYear by remember { mutableStateOf(currentYear) }
@@ -51,6 +57,8 @@ fun PayrollProcessingScreen(
     var employees by remember { mutableStateOf(emptyList<Employee>()) }
     var payrolls by remember { mutableStateOf(emptyList<EmployeePayroll>()) }
     var processingEmployeeId by remember { mutableStateOf<String?>(null) }
+    var isGeneratingPayrolls by remember { mutableStateOf(false) }
+    var toast by remember { mutableStateOf<ToastData?>(null) }
 
     val scope = rememberCoroutineScope()
 
@@ -59,26 +67,38 @@ fun PayrollProcessingScreen(
     var showPending by remember { mutableStateOf(true) }
     var showFailed by remember { mutableStateOf(true) }
 
-    // Load data
-    LaunchedEffect(selectedMonth, selectedYear, showProcessed, showPending, showFailed) {
-        isLoading = true
+    // Function to show toast messages
+    fun showToastMessage(message: String, type: ToastType) {
+        toast = ToastData(message = message, type = type)
+    }
 
-        // Get all active employees
-        employees = employeeRepository.getAllEmployees(true)
+    // Function to load data
+    fun loadData() {
+        scope.launch {
+            isLoading = true
 
-        // Get payrolls for the selected month
-        val allPayrolls = employeeRepository.getPayrollsByMonth(selectedMonth, selectedYear)
+            // Get all active employees
+            employees = employeeRepository.getAllEmployees(true)
 
-        // Apply filters
-        payrolls = allPayrolls.filter { payroll ->
-            when (payroll.paymentStatus) {
-                PaymentStatus.PAID -> showProcessed
-                PaymentStatus.PENDING -> showPending
-                else -> true
+            // Get payrolls for the selected month
+            val allPayrolls = employeeRepository.getPayrollsByMonth(selectedMonth, selectedYear)
+
+            // Apply filters
+            payrolls = allPayrolls.filter { payroll ->
+                when (payroll.paymentStatus) {
+                    PaymentStatus.PAID -> showProcessed
+                    PaymentStatus.PENDING -> showPending
+                    else -> showFailed
+                }
             }
-        }
 
-        isLoading = false
+            isLoading = false
+        }
+    }
+
+    // Load data when parameters change
+    LaunchedEffect(selectedMonth, selectedYear, showProcessed, showPending, showFailed) {
+        loadData()
     }
 
     // Filter payrolls by search query
@@ -102,19 +122,12 @@ fun PayrollProcessingScreen(
             val result = employeeRepository.processPayroll(employeeId, selectedMonth, selectedYear)
 
             if (result.isSuccess) {
-                showToast("Payroll processed successfully", ToastType.SUCCESS)
-
-                // Refresh payrolls
-                val allPayrolls = employeeRepository.getPayrollsByMonth(selectedMonth, selectedYear)
-                payrolls = allPayrolls.filter { payroll ->
-                    when (payroll.paymentStatus) {
-                        PaymentStatus.PAID -> showProcessed
-                        PaymentStatus.PENDING -> showPending
-                        else -> true
-                    }
-                }
+                showToastMessage("Payroll processed successfully", ToastType.SUCCESS)
+                
+                // Reload data to get updated status
+                loadData()
             } else {
-                showToast(
+                showToastMessage(
                     result.exceptionOrNull()?.message ?: "Failed to process payroll",
                     ToastType.ERROR
                 )
@@ -123,217 +136,245 @@ fun PayrollProcessingScreen(
             processingEmployeeId = null
         }
     }
+    
+    // Generate payrolls for all employees without processing payments
+    fun generatePayrolls() {
+        scope.launch {
+            isGeneratingPayrolls = true
+            
+            if (sqlRepository != null) {
+                val result = sqlRepository.createPendingPayrolls(selectedMonth, selectedYear)
+                
+                if (result.isSuccess) {
+                    showToastMessage("Payroll entries generated for all employees", ToastType.SUCCESS)
+                    // Reload data to show the new entries
+                    loadData()
+                } else {
+                    showToastMessage(
+                        result.exceptionOrNull()?.message ?: "Failed to generate payroll entries",
+                        ToastType.ERROR
+                    )
+                }
+            } else {
+                showToastMessage("Repository implementation not supported", ToastType.ERROR)
+            }
+            
+            isGeneratingPayrolls = false
+        }
+    }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        // Header
-        PageHeader(
-            title = "Process Payroll",
-            subtitle = "Generate and process employee payrolls",
-            icon = Icons.Default.Payment
-        )
+    if (isLoading) {
+        LoadingScreen()
+        return
+    }
 
-        // Action Bar
-        Row(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
-            // Month/Year selection
-            Box {
-                var monthExpanded by remember { mutableStateOf(false) }
-
-                OutlinedButton(onClick = { monthExpanded = true }) {
-                    Text(Month.of(selectedMonth).getDisplayName(TextStyle.FULL, Locale.getDefault()))
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = "Select month"
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = monthExpanded,
-                    onDismissRequest = { monthExpanded = false }
-                ) {
-                    for (month in 1..12) {
-                        DropdownMenuItem(onClick = {
-                            selectedMonth = month
-                            monthExpanded = false
-                        }) {
-                            Text(Month.of(month).getDisplayName(TextStyle.FULL, Locale.getDefault()))
-                        }
-                    }
-                }
-            }
-
-            Box {
-                var yearExpanded by remember { mutableStateOf(false) }
-
-                OutlinedButton(onClick = { yearExpanded = true }) {
-                    Text(selectedYear.toString())
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = "Select year"
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = yearExpanded,
-                    onDismissRequest = { yearExpanded = false }
-                ) {
-                    for (year in currentYear - 2..currentYear + 1) {
-                        DropdownMenuItem(onClick = {
-                            selectedYear = year
-                            yearExpanded = false
-                        }) {
-                            Text(year.toString())
-                        }
-                    }
-                }
-            }
-
-            // Search
-            SimpleSearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                placeholder = "Search employees...",
-                modifier = Modifier.weight(1f)
+            // Header
+            PageHeader(
+                title = "Process Payroll",
+                subtitle = "Generate and process employee payrolls",
+                icon = Icons.Default.Payment
             )
 
-            // Filter buttons
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    text = "Processed",
-                    selected = showProcessed,
-                    onSelected = { showProcessed = it },
-                    color = AppColors.Success
-                )
-
-                FilterChip(
-                    text = "Pending",
-                    selected = showPending,
-                    onSelected = { showPending = it },
-                    color = AppColors.Warning
-                )
-            }
-        }
-
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (payrolls.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colors.onSurface.copy(alpha = 0.5f)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "No payroll records found for this period",
-                        style = MaterialTheme.typography.h6,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.5f)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    if (employees.isNotEmpty()) {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    isLoading = true
-                                    val result = employeeRepository.bulkProcessPayroll(selectedMonth, selectedYear)
-                                    if (result.isSuccess) {
-                                        showToast("Payroll generated for all employees", ToastType.SUCCESS)
-                                        // Refresh payrolls
-                                        payrolls = employeeRepository.getPayrollsByMonth(selectedMonth, selectedYear)
-                                    } else {
-                                        showToast(
-                                            result.exceptionOrNull()?.message ?: "Failed to generate payroll",
-                                            ToastType.ERROR
-                                        )
-                                    }
-                                    isLoading = false
-                                }
-                            }
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Generate Payroll for All Employees")
-                        }
-                    }
-                }
-            }
-        } else {
-            // Table Header
+            // Action Bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colors.primary.copy(alpha = 0.1f))
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Employee",
-                    style = MaterialTheme.typography.subtitle2,
-                    modifier = Modifier.weight(0.25f)
+                // Month/Year selection
+                Box {
+                    var monthExpanded by remember { mutableStateOf(false) }
+
+                    OutlinedButton(onClick = { monthExpanded = true }) {
+                        Text(Month.of(selectedMonth).getDisplayName(TextStyle.FULL, Locale.getDefault()))
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Select month"
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = monthExpanded,
+                        onDismissRequest = { monthExpanded = false }
+                    ) {
+                        for (month in 1..12) {
+                            DropdownMenuItem(onClick = {
+                                selectedMonth = month
+                                monthExpanded = false
+                            }) {
+                                Text(Month.of(month).getDisplayName(TextStyle.FULL, Locale.getDefault()))
+                            }
+                        }
+                    }
+                }
+
+                Box {
+                    var yearExpanded by remember { mutableStateOf(false) }
+
+                    OutlinedButton(onClick = { yearExpanded = true }) {
+                        Text(selectedYear.toString())
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Select year"
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = yearExpanded,
+                        onDismissRequest = { yearExpanded = false }
+                    ) {
+                        for (year in currentYear - 2..currentYear + 1) {
+                            DropdownMenuItem(onClick = {
+                                selectedYear = year
+                                yearExpanded = false
+                            }) {
+                                Text(year.toString())
+                            }
+                        }
+                    }
+                }
+
+                // Search
+                SimpleSearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    placeholder = "Search employees...",
+                    modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = "Department",
-                    style = MaterialTheme.typography.subtitle2,
-                    modifier = Modifier.weight(0.15f)
-                )
-                Text(
-                    text = "Salary",
-                    style = MaterialTheme.typography.subtitle2,
-                    modifier = Modifier.weight(0.15f)
-                )
-                Text(
-                    text = "Status",
-                    style = MaterialTheme.typography.subtitle2,
-                    modifier = Modifier.weight(0.15f)
-                )
-                Text(
-                    text = "Date",
-                    style = MaterialTheme.typography.subtitle2,
-                    modifier = Modifier.weight(0.15f)
-                )
-                Text(
-                    text = "Actions",
-                    style = MaterialTheme.typography.subtitle2,
-                    modifier = Modifier.weight(0.15f)
-                )
+
+                // Filter buttons
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        text = "Processed",
+                        selected = showProcessed,
+                        onSelected = { showProcessed = it },
+                        color = AppColors.Success
+                    )
+
+                    FilterChip(
+                        text = "Pending",
+                        selected = showPending,
+                        onSelected = { showPending = it },
+                        color = AppColors.Warning
+                    )
+                }
             }
 
-            // Table Content
-            LazyColumn(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(filteredPayrolls) { payroll ->
-                    val employee = employees.find { it.id == payroll.employeeId }
-
-                    if (employee != null) {
-                        PayrollRow(
-                            payroll = payroll,
-                            employee = employee,
-                            isProcessing = processingEmployeeId == employee.id,
-                            onProcess = { processEmployeePayroll(employee.id) },
-                            onEmployeeDetails = { onEmployeeDetails(NavDestination.EmployeeEdit(employee.id)) },
-                            onPayrollDetails = { onNavigate(NavDestination.PayrollDetails(payroll.id)) }
+            if (payrolls.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colors.onSurface.copy(alpha = 0.5f)
                         )
-                        Divider()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "No payroll records found for this period",
+                            style = MaterialTheme.typography.h6,
+                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (employees.isNotEmpty()) {
+                            Button(
+                                onClick = { generatePayrolls() },
+                                enabled = !isGeneratingPayrolls
+                            ) {
+                                if (isGeneratingPayrolls) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        color = MaterialTheme.colors.onPrimary,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Generate Payroll Entries")
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Table Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colors.primary.copy(alpha = 0.1f))
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        text = "Employee",
+                        style = MaterialTheme.typography.subtitle2,
+                        modifier = Modifier.weight(0.25f)
+                    )
+                    Text(
+                        text = "Department",
+                        style = MaterialTheme.typography.subtitle2,
+                        modifier = Modifier.weight(0.15f)
+                    )
+                    Text(
+                        text = "Salary",
+                        style = MaterialTheme.typography.subtitle2,
+                        modifier = Modifier.weight(0.15f)
+                    )
+                    Text(
+                        text = "Status",
+                        style = MaterialTheme.typography.subtitle2,
+                        modifier = Modifier.weight(0.15f)
+                    )
+                    Text(
+                        text = "Date",
+                        style = MaterialTheme.typography.subtitle2,
+                        modifier = Modifier.weight(0.15f)
+                    )
+                    Text(
+                        text = "Actions",
+                        style = MaterialTheme.typography.subtitle2,
+                        modifier = Modifier.weight(0.15f)
+                    )
+                }
+
+                // Table Content
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(filteredPayrolls) { payroll ->
+                        val employee = employees.find { it.id == payroll.employeeId }
+
+                        if (employee != null) {
+                            PayrollRow(
+                                payroll = payroll,
+                                employee = employee,
+                                isProcessing = processingEmployeeId == employee.id,
+                                onProcess = { processEmployeePayroll(employee.id) },
+                                onEmployeeDetails = { onEmployeeDetails(NavDestination.EmployeeEdit(employee.id)) },
+                                onPayrollDetails = { onNavigate(NavDestination.PayrollDetails(payroll.id)) }
+                            )
+                            Divider()
+                        }
                     }
                 }
             }
         }
+        
+        // Show toast message
+        Toast(
+            toast = toast,
+            onDismiss = { toast = null }
+        )
     }
 }
 
@@ -397,6 +438,7 @@ fun PayrollRow(
             val (backgroundColor, text) = when (payroll.paymentStatus) {
                 PaymentStatus.PAID -> Pair(AppColors.Success, "Processed")
                 PaymentStatus.PENDING -> Pair(AppColors.Warning, "Pending")
+                PaymentStatus.PROCESSING -> Pair(AppColors.Error, "Failed")
                 else -> Pair(AppColors.Gray400, "Unknown")
             }
 
@@ -442,14 +484,6 @@ fun PayrollRow(
                     tint = MaterialTheme.colors.primary
                 )
             }
-
-//            IconButton(onClick = onPayrollDetails) {
-//                Icon(
-//                    imageVector = Icons.Default.Receipt,
-//                    contentDescription = "Payroll details",
-//                    tint = MaterialTheme.colors.primary
-//                )
-//            }
 
             if (payroll.paymentStatus != PaymentStatus.PAID) {
                 IconButton(

@@ -34,6 +34,7 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
 
     override suspend fun createPurchaseOrder(purchaseOrder: PurchaseOrder): PurchaseOrder = withContext(Dispatchers.IO) {
         try {
+            println("Creating new PO with ID: ${purchaseOrder.id}, Number: ${purchaseOrder.poNumber}")
             val connection = db.getConnection()
             val document = Document(
                 id = purchaseOrder.id,
@@ -49,6 +50,8 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
                 )
             )
 
+            println("Inserting document: $document")
+
             connection.prepareStatement("""
                 INSERT INTO documents (id, type, number, filePath, content, createdAt, updatedAt, createdBy, metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -62,8 +65,10 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
                 stmt.setLong(7, document.updatedAt)
                 stmt.setString(8, document.createdBy)
                 stmt.setString(9, json.encodeToString(document.metadata))
-                stmt.executeUpdate()
+                val rowsAffected = stmt.executeUpdate()
+                println("Insert result: $rowsAffected rows affected")
             }
+            println("PO created successfully")
             purchaseOrder
         } catch (e: Exception) {
             println("Error creating purchase order: ${e.message}")
@@ -123,6 +128,19 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
     override suspend fun updatePurchaseOrder(purchaseOrder: PurchaseOrder): PurchaseOrder = withContext(Dispatchers.IO) {
         try {
             val connection = db.getConnection()
+            println("Updating PO with ID: ${purchaseOrder.id}, Number: ${purchaseOrder.poNumber}")
+            
+            // First check if the document exists
+            val existingPO = getPurchaseOrderById(purchaseOrder.id)
+            if (existingPO == null) {
+                println("No existing PO found with ID: ${purchaseOrder.id}, creating new one")
+                // If not found by ID, try to create it
+                return@withContext createPurchaseOrder(purchaseOrder)
+            }
+            
+            println("Found existing PO, updating: $existingPO")
+            
+            // Update the existing document
             connection.prepareStatement("""
                 UPDATE documents 
                 SET content = ?, metadata = ?, updatedAt = ?, number = ?
@@ -133,17 +151,29 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
                     "total" to purchaseOrder.total.toString(),
                     "status" to purchaseOrder.status
                 )
-                stmt.setString(1, json.encodeToString(purchaseOrder))
-                stmt.setString(2, json.encodeToString(metadata))
+                val content = json.encodeToString(purchaseOrder)
+                val metadataJson = json.encodeToString(metadata)
+                
+                println("Update parameters:")
+                println("Content: $content")
+                println("Metadata: $metadataJson")
+                println("ID: ${purchaseOrder.id}")
+                println("Type: ${DocumentType.PURCHASE_ORDER.name}")
+                
+                stmt.setString(1, content)
+                stmt.setString(2, metadataJson)
                 stmt.setLong(3, TimeUtils.getCurrentISTTimestamp())
                 stmt.setString(4, purchaseOrder.poNumber)
                 stmt.setString(5, purchaseOrder.id)
                 stmt.setString(6, DocumentType.PURCHASE_ORDER.name)
                 val rowsAffected = stmt.executeUpdate()
+                println("Rows affected by update: $rowsAffected")
+                
                 if (rowsAffected == 0) {
                     throw Exception("No purchase order found with id: ${purchaseOrder.id}")
                 }
             }
+            println("PO updated successfully")
             purchaseOrder
         } catch (e: Exception) {
             println("Error updating purchase order: ${e.message}")
@@ -157,7 +187,7 @@ class PurchaseOrderRepositorySQLiteImpl : PurchaseOrderRepository {
             val connection = db.getConnection()
             connection.prepareStatement("""
                 DELETE FROM documents 
-                WHERE number = ? AND type = ?
+                WHERE id = ? AND type = ?
             """).use { stmt ->
                 stmt.setString(1, id)
                 stmt.setString(2, DocumentType.PURCHASE_ORDER.name)

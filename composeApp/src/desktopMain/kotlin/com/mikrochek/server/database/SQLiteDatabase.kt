@@ -207,7 +207,6 @@ object SQLiteDatabase {
                     )
                 """)
             }
-            populateDummyData()
         } catch (e: SQLException) {
             e.printStackTrace()
             throw RuntimeException("Failed to create database tables", e)

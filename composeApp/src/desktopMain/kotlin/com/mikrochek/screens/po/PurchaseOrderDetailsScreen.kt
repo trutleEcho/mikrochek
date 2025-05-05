@@ -57,7 +57,7 @@ fun PurchaseOrderDetailsScreen(
             if (deletePO) {
                 purchaseOrder?.let { po ->
                     try {
-                        purchaseOrderRepository.deletePurchaseOrder(po.poNumber)
+                        purchaseOrderRepository.deletePurchaseOrder(po.id)
                         toast = ToastData("Purchase order deleted successfully", ToastType.SUCCESS)
                         onNavigate(NavDestination.PurchaseOrdersList)
                     } catch (e: Exception) {

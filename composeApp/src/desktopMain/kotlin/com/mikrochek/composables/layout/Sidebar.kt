@@ -37,18 +37,18 @@ fun Sidebar(
     val currentUser = UserState.getCurrentUser()
     val menuItems = AppMenuItems.getMenuItemsByCategory(currentUser)
     val scrollState = rememberScrollState()
-    
+
     // Find current category from route
     val currentCategory = remember(currentRoute) {
-        menuItems.entries.find { (_, items) -> 
+        menuItems.entries.find { (_, items) ->
             items.any { it.title == currentRoute }
         }?.key ?: "Dashboard"
     }
-    
-    var expandedCategory by remember(currentCategory) { 
+
+    var expandedCategory by remember(currentCategory) {
         mutableStateOf(currentCategory)
     }
-    
+
     val logoutInteractionSource = remember { MutableInteractionSource() }
     val isLogoutHovered by logoutInteractionSource.collectIsHoveredAsState()
 
@@ -102,13 +102,13 @@ fun Sidebar(
                     }
                     Column(modifier = Modifier.padding(start = 12.dp)) {
                         Text(
-                            text = currentUser?.name ?: "Pradyumna Tanksali",
+                            text = currentUser?.name ?: "Guest",
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            text = "kush",
+                            text = if (currentUser?.accountType != null) currentUser.accountType.toString() else "Guest",
                             color = AppColors.Gray500,
                             fontSize = 12.sp
                         )
@@ -132,13 +132,13 @@ fun Sidebar(
                 val categoryInteractionSource = remember { MutableInteractionSource() }
                 val isCategoryHovered by categoryInteractionSource.collectIsHoveredAsState()
                 val hasSelectedChild = items.any { it.title == currentRoute }
-                
+
                 // Rotation animation for arrow
                 val rotationAngle by animateFloatAsState(
                     targetValue = if (isExpanded) 0f else -90f,
                     animationSpec = tween(300, easing = FastOutSlowInEasing)
                 )
-                
+
                 // Category Header with hover animation
                 Row(
                     modifier = Modifier
@@ -302,7 +302,7 @@ fun Sidebar(
                             ) { onLogout() }
                             .background(
                                 animateColorAsState(
-                                    if (isLogoutHovered) AppColors.Gray800 
+                                    if (isLogoutHovered) AppColors.Gray800
                                     else Color.Transparent,
                                     animationSpec = tween(300)
                                 ).value
@@ -314,7 +314,7 @@ fun Sidebar(
                             imageVector = Icons.Default.ExitToApp,
                             contentDescription = "Logout",
                             tint = animateColorAsState(
-                                if (isLogoutHovered) AppColors.Gray300 
+                                if (isLogoutHovered) AppColors.Gray300
                                 else AppColors.Gray500,
                                 animationSpec = tween(300)
                             ).value

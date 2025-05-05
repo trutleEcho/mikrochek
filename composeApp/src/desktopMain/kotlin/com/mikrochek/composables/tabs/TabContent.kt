@@ -195,7 +195,8 @@ fun TabContent(
 
                 // Payroll Management
                 NavDestination.PayrollDashboard -> PayrollDashboard(
-                    onNavigate = { newDest -> handleScreenNavigation(newDest) }
+                    onNavigate = { newDest -> handleScreenNavigation(newDest) },
+                    showToast = showToast
                 )
 
                 NavDestination.PayrollProcessing -> PayrollProcessingScreen(

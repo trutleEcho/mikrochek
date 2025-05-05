@@ -193,7 +193,7 @@ fun KanbanBoardScreen(
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .padding(bottom = 16.dp),
+                                    .padding(bottom = 16.dp, start = 8.dp, end = 8.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items(itemsInStage) { item ->

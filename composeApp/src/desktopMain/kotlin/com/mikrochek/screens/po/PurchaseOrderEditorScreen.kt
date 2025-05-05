@@ -88,8 +88,10 @@ fun PurchaseOrderEditorScreen(
     LaunchedEffect(poId) {
         try {
             if (poId != null) {
+                println("Loading PO with ID: $poId")
                 val existingPO = purchaseOrderRepository.getPurchaseOrderById(poId)
                 if (existingPO != null) {
+                    println("Found PO: $existingPO")
                     purchaseOrder = existingPO
                     poNumber = existingPO.poNumber
                     vendorName = existingPO.vendorName
@@ -100,6 +102,9 @@ fun PurchaseOrderEditorScreen(
                     items = existingPO.items
                     terms = existingPO.terms
                     notes = existingPO.notes
+                } else {
+                    println("No PO found with ID: $poId")
+                    toast = ToastData("Purchase order not found", ToastType.ERROR)
                 }
             }
             products = productRepository.getAllProducts(isActive = true)

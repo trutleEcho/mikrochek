@@ -16,8 +16,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mikrochek.components.ActionButton
 import com.mikrochek.components.QuickStatCard
+import com.mikrochek.components.Toast
+import com.mikrochek.components.ToastData
+import com.mikrochek.components.ToastType
 import com.mikrochek.components.layout.PageHeader
 import com.mikrochek.navigation.NavDestination
+import com.mikrochek.screens.base.LoadingScreen
 import com.mikrochek.server.database.models.PaymentStatus
 import com.mikrochek.server.repository.employee.EmployeeRepository
 import com.mikrochek.theme.AppColors
@@ -34,6 +38,7 @@ import kotlin.random.nextInt
 @Composable
 fun PayrollDashboard(
     onNavigate: (NavDestination) -> Unit,
+    showToast: (String, ToastType) -> Unit
 ) {
     val currentDate = remember { LocalDate.now() }
     val currentMonth = remember { currentDate.monthValue }
@@ -44,6 +49,7 @@ fun PayrollDashboard(
     var selectedYear by remember { mutableStateOf(currentYear) }
     var isLoading by remember { mutableStateOf(true) }
     var isProcessing by remember { mutableStateOf(false) }
+    var toast by remember { mutableStateOf<ToastData?>(null) }
     val scope = rememberCoroutineScope()
     
     // Payroll stats
@@ -53,28 +59,40 @@ fun PayrollDashboard(
     var employeeCount by remember { mutableStateOf(0) }
     var departmentStats by remember { mutableStateOf(mapOf<String, Double>()) }
     
-    // Load payroll data
-    LaunchedEffect(selectedMonth, selectedYear) {
-        isLoading = true
-        
-        // Get all active employees
-        val employees = employeeRepository.getAllEmployees(true)
-        employeeCount = employees.size
-        
-        // Get payroll summary for selected month
-        val payrolls = employeeRepository.getPayrollsByMonth(selectedMonth, selectedYear)
-        
-        // Calculate statistics
-        totalPayroll = employeeRepository.getTotalPayrollCost(selectedMonth, selectedYear)
-        
-        val statusSummary = employeeRepository.getPayrollStatusSummary(selectedMonth, selectedYear)
-        processedCount = statusSummary[PaymentStatus.PAID] ?: 0
-        pendingCount = statusSummary[PaymentStatus.PENDING] ?: 0
+    // Function to show toast messages
+    fun showToastMessage(message: String, type: ToastType) {
+        toast = ToastData(message = message, type = type)
+    }
+    
+    // Function to load data
+    fun loadData() {
+        scope.launch {
+            isLoading = true
+            
+            // Get all active employees
+            val employees = employeeRepository.getAllEmployees(true)
+            employeeCount = employees.size
+            
+            // Get payroll summary for selected month
+            val payrolls = employeeRepository.getPayrollsByMonth(selectedMonth, selectedYear)
+            
+            // Calculate statistics
+            totalPayroll = employeeRepository.getTotalPayrollCost(selectedMonth, selectedYear)
+            
+            val statusSummary = employeeRepository.getPayrollStatusSummary(selectedMonth, selectedYear)
+            processedCount = statusSummary[PaymentStatus.PAID] ?: 0
+            pendingCount = statusSummary[PaymentStatus.PENDING] ?: 0
 
-        // Department salary distribution
-        departmentStats = employeeRepository.getAverageSalaryByDepartment()
-        
-        isLoading = false
+            // Department salary distribution
+            departmentStats = employeeRepository.getAverageSalaryByDepartment()
+            
+            isLoading = false
+        }
+    }
+    
+    // Load data when parameters change
+    LaunchedEffect(selectedMonth, selectedYear) {
+        loadData()
     }
     
     fun processPayroll() {
@@ -82,122 +100,125 @@ fun PayrollDashboard(
             isProcessing = true
             val result = employeeRepository.bulkProcessPayroll(selectedMonth, selectedYear)
             if (result.isSuccess) {
-                // Refresh stats
-                val payrolls = employeeRepository.getPayrollsByMonth(selectedMonth, selectedYear)
-                val statusSummary = employeeRepository.getPayrollStatusSummary(selectedMonth, selectedYear)
-                processedCount = statusSummary[PaymentStatus.PAID] ?: 0
-                pendingCount = statusSummary[PaymentStatus.PENDING] ?: 0
-                totalPayroll = employeeRepository.getTotalPayrollCost(selectedMonth, selectedYear)
+                showToastMessage("Payroll successfully processed for all employees", ToastType.SUCCESS)
+                // Reload data to refresh stats
+                loadData()
+            } else {
+                showToastMessage(
+                    result.exceptionOrNull()?.message ?: "Failed to process payroll",
+                    ToastType.ERROR
+                )
             }
             isProcessing = false
         }
     }
     
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        // Header
-        PageHeader(
-            title = "Payroll Dashboard",
-            subtitle = "Manage and process employee payrolls",
-            icon = Icons.Default.Payments
-        )
-        
-        // Month and year selector
-        Row(
+    if (isLoading) {
+        LoadingScreen()
+        return
+    }
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
-            // Month/Year selector
+            // Header
+            PageHeader(
+                title = "Payroll Dashboard",
+                subtitle = "Manage and process employee payrolls",
+                icon = Icons.Default.Payments
+            )
+            
+            // Month and year selector
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Payroll Period:", style = MaterialTheme.typography.subtitle1)
-                Spacer(modifier = Modifier.width(16.dp))
-                
-                // Month dropdown
-                Box {
-                    var monthExpanded by remember { mutableStateOf(false) }
+                // Month/Year selector
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Payroll Period:", style = MaterialTheme.typography.subtitle1)
+                    Spacer(modifier = Modifier.width(16.dp))
                     
-                    OutlinedButton(onClick = { monthExpanded = true }) {
-                        Text(Month.of(selectedMonth).getDisplayName(TextStyle.FULL, Locale.getDefault()))
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Select month"
-                        )
+                    // Month dropdown
+                    Box {
+                        var monthExpanded by remember { mutableStateOf(false) }
+                        
+                        OutlinedButton(onClick = { monthExpanded = true }) {
+                            Text(Month.of(selectedMonth).getDisplayName(TextStyle.FULL, Locale.getDefault()))
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Select month"
+                            )
+                        }
+                        
+                        DropdownMenu(
+                            expanded = monthExpanded,
+                            onDismissRequest = { monthExpanded = false }
+                        ) {
+                            for (month in 1..12) {
+                                DropdownMenuItem(onClick = {
+                                    selectedMonth = month
+                                    monthExpanded = false
+                                }) {
+                                    Text(Month.of(month).getDisplayName(TextStyle.FULL, Locale.getDefault()))
+                                }
+                            }
+                        }
                     }
                     
-                    DropdownMenu(
-                        expanded = monthExpanded,
-                        onDismissRequest = { monthExpanded = false }
-                    ) {
-                        for (month in 1..12) {
-                            DropdownMenuItem(onClick = {
-                                selectedMonth = month
-                                monthExpanded = false
-                            }) {
-                                Text(Month.of(month).getDisplayName(TextStyle.FULL, Locale.getDefault()))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    
+                    // Year dropdown
+                    Box {
+                        var yearExpanded by remember { mutableStateOf(false) }
+                        
+                        OutlinedButton(onClick = { yearExpanded = true }) {
+                            Text(selectedYear.toString())
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Select year"
+                            )
+                        }
+                        
+                        DropdownMenu(
+                            expanded = yearExpanded,
+                            onDismissRequest = { yearExpanded = false }
+                        ) {
+                            for (year in currentYear-2..currentYear+1) {
+                                DropdownMenuItem(onClick = {
+                                    selectedYear = year
+                                    yearExpanded = false
+                                }) {
+                                    Text(year.toString())
+                                }
                             }
                         }
                     }
                 }
                 
-                Spacer(modifier = Modifier.width(16.dp))
-                
-                // Year dropdown
-                Box {
-                    var yearExpanded by remember { mutableStateOf(false) }
-                    
-                    OutlinedButton(onClick = { yearExpanded = true }) {
-                        Text(selectedYear.toString())
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Select year"
+                // Action buttons
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.width(180.dp)
+                    ){
+                        ActionButton(
+                            onClick = { onNavigate(NavDestination.PayrollProcessing) },
+                            text = "Process Payroll",
+                            icon = Icons.Default.CreditCard
                         )
-                    }
-                    
-                    DropdownMenu(
-                        expanded = yearExpanded,
-                        onDismissRequest = { yearExpanded = false }
-                    ) {
-                        for (year in currentYear-2..currentYear+1) {
-                            DropdownMenuItem(onClick = {
-                                selectedYear = year
-                                yearExpanded = false
-                            }) {
-                                Text(year.toString())
-                            }
-                        }
                     }
                 }
             }
             
-            // Action buttons
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Box(
-                    modifier = Modifier.width(180.dp)
-                ){
-                    ActionButton(
-                        onClick = { onNavigate(NavDestination.PayrollProcessing) },
-                        text = "Process Payroll",
-                        icon = Icons.Default.CreditCard
-                    )
-                }
-            }
-        }
-        
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else {
             // Dashboard content
             Column(
                 modifier = Modifier
@@ -277,7 +298,7 @@ fun PayrollDashboard(
                         )
                         
                         Text(
-                            "${processedCount * 100 / if (employeeCount > 0) employeeCount else 1}% Complete",
+                            "${if (employeeCount > 0) (processedCount * 100 / employeeCount) else 0}% Complete",
                             style = MaterialTheme.typography.caption
                         )
                     }
@@ -377,6 +398,12 @@ fun PayrollDashboard(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+        
+        // Show toast message
+        Toast(
+            toast = toast,
+            onDismiss = { toast = null }
+        )
     }
 }
 
