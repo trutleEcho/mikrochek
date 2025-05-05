@@ -171,7 +171,7 @@ fun MainDashboard(
                     // Mini Kanban Board
                     Surface(
                         modifier = Modifier
-                            .weight(2f)
+                            .weight(3f)
                             .fillMaxHeight(),
                         color = MaterialTheme.colors.surface,
                         shape = RoundedCornerShape(16.dp),

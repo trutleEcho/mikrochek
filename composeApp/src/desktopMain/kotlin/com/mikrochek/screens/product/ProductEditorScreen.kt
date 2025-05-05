@@ -125,7 +125,7 @@ fun ProductEditorScreen(
                                 )
                             }
                             Box(
-                                modifier = Modifier.width(120.dp)
+                                modifier = Modifier.width(100.dp)
                             ){
                                 ActionButton(
                                     onClick = {

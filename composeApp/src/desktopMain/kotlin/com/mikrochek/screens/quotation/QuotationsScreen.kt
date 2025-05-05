@@ -99,11 +99,12 @@ fun QuotationsScreen(
                     title = "Quotations",
                     subtitle = "${quotations.size} quotations total",
                     actions = {
-                        Box(modifier = Modifier.width(180.dp)){
+                        Box(modifier = Modifier.width(220.dp)){
                             ActionButton(
                                 icon = Icons.Default.Add,
                                 text = "New Quotation",
-                                onClick = onCreateNew
+                                onClick = onCreateNew,
+                                description = "Create a new Quotation."
                             )
                         }
                     }

@@ -31,8 +31,8 @@ fun LoginScreen(
     onNavigateToSignup: () -> Unit,
     onUserAuthenticated: (User) -> Unit = {}
 ) {
-    var userName by remember { mutableStateOf("kush") }
-    var password by remember { mutableStateOf("kush") }
+    var userName by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var showErrorDialog by remember { mutableStateOf(false) }

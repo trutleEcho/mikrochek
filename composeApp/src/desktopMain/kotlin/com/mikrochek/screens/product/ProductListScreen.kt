@@ -75,12 +75,13 @@ fun ProductListScreen(
                     subtitle = "${products.size} products in inventory",
                     actions = {
                         Box(
-                            modifier = Modifier.width(180.dp)
+                            modifier = Modifier.width(220.dp)
                         ) {
                             ActionButton(
                                 icon = Icons.Default.Add,
                                 text = "Add Product",
-                                onClick = { onNavigateToEdit(null) }
+                                onClick = { onNavigateToEdit(null) },
+                                description = "Create a new Product."
                             )
                         }
                     }

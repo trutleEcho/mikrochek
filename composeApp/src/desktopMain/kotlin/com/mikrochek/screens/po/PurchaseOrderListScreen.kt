@@ -97,12 +97,13 @@ fun PurchaseOrderListScreen(
                     subtitle = "${purchaseOrders.size} orders found",
                     actions = {
                        Box(
-                           modifier = Modifier.width(160.dp)
+                           modifier = Modifier.width(260.dp)
                        ){
                            ActionButton(
                                text = "Create New",
                                icon = Icons.Default.Add,
-                               onClick = { onNavigate(NavDestination.PurchaseOrderCreate) }
+                               onClick = { onNavigate(NavDestination.PurchaseOrderCreate) },
+                               description = "create a new Purchase Order."
                            )
                        }
                     }

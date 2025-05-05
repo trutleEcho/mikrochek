@@ -128,12 +128,13 @@ fun EmployeeListScreen(
             
             // Add Employee Button
             Box(
-                modifier = Modifier.width(180.dp)
+                modifier = Modifier.width(220.dp)
             ){
                 ActionButton(
                     onClick = { onNavigate(NavDestination.EmployeeCreate) },
                     text = "Add Employee",
-                    icon = Icons.Default.Add
+                    icon = Icons.Default.Add,
+                    description = "Create a new employee."
                 )
             }
         }

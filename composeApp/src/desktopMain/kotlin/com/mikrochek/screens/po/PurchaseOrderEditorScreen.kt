@@ -395,7 +395,7 @@ fun PurchaseOrderEditorScreen(
                                         }
                                     )
                                 }
-                                Box(modifier = Modifier.width(120.dp)) {
+                                Box(modifier = Modifier.width(100.dp)) {
                                     ActionButton(
                                         text = "Save",
                                         icon = Icons.Default.Save,

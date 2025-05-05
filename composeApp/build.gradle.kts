@@ -73,7 +73,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.mikrochek"
-            packageVersion = "1.1.0"
+            packageVersion = "1.1.1"
             jvmArgs += listOf("-Xmx512m")
             modules("java.sql") // <-- ensure java.sql module is included if using modular JVM
         }

@@ -153,7 +153,7 @@ fun PurchaseOrderDetailsScreen(
 //                                    onClick = { /* TODO: Implement printing */ }
 //                                )
                                 Box(
-                                    modifier = Modifier.width(120.dp)
+                                    modifier = Modifier.width(100.dp)
                                 ) {
                                     ActionButton(
                                         text = "Edit",

@@ -166,7 +166,7 @@ fun QuotationEditorScreen(
                                         }
                                     )
                                 }
-                                Box(modifier = Modifier.width(120.dp)) {
+                                Box(modifier = Modifier.width(100.dp)) {
                                     ActionButton(
                                         text = "Save",
                                         icon = Icons.Default.Save,
@@ -346,7 +346,7 @@ fun QuotationEditorScreen(
                                                 )
                                                 
                                                 Box(
-                                                    modifier = Modifier.width(160.dp)
+                                                    modifier = Modifier.width(140.dp)
                                                 ){
                                                     ActionButton(
                                                         text = "Add Item",

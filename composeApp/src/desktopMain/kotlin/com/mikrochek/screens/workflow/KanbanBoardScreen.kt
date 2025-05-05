@@ -108,12 +108,13 @@ fun KanbanBoardScreen(
                 ) {
                     // Refresh button
                     Box(
-                        modifier = Modifier.width(130.dp)
+                        modifier = Modifier.width(220.dp)
                     ){
                         ActionButton(
                             text = "Refresh",
                             icon = Icons.Default.Refresh,
-                            onClick = { /* Reload data */ }
+                            onClick = { /* Reload data */ },
+                            description = "Re-load new quotations."
                         )
                     }
                 }
